@@ -182,19 +182,24 @@ async def upload_file_to_s3(
     )
 
     try:
-        # Prepare form data (exclude Content-Type from data, it goes in files)
-        data = {k: v for k, v in upload_fields.items() if k != "Content-Type"}
+        # Get content type from presigned fields (must match S3 policy exactly)
+        policy_content_type = upload_fields.get("Content-Type", resolved_content_type)
 
-        # Prepare file for upload
-        files = {
-            "file": (resolved_file_name, file_obj, resolved_content_type)
-        }
+        # Build multipart form data manually to ensure correct field order
+        # S3 requires: all policy fields first, then file last
+        form_files = {}
+        
+        # Add all presigned fields first (in order)
+        for key, value in upload_fields.items():
+            form_files[key] = (None, value)
+        
+        # Add file last (required by S3)
+        form_files["file"] = (resolved_file_name, file_obj, policy_content_type)
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 upload_url,
-                data=data,
-                files=files,
+                files=form_files,
                 timeout=timeout,
             )
 
@@ -242,19 +247,24 @@ def upload_file_to_s3_sync(
     )
 
     try:
-        # Prepare form data
-        data = {k: v for k, v in upload_fields.items() if k != "Content-Type"}
+        # Get content type from presigned fields (must match S3 policy exactly)
+        policy_content_type = upload_fields.get("Content-Type", resolved_content_type)
 
-        # Prepare file for upload
-        files = {
-            "file": (resolved_file_name, file_obj, resolved_content_type)
-        }
+        # Build multipart form data manually to ensure correct field order
+        # S3 requires: all policy fields first, then file last
+        form_files = {}
+        
+        # Add all presigned fields first (in order)
+        for key, value in upload_fields.items():
+            form_files[key] = (None, value)
+        
+        # Add file last (required by S3)
+        form_files["file"] = (resolved_file_name, file_obj, policy_content_type)
 
         with httpx.Client() as client:
             response = client.post(
                 upload_url,
-                data=data,
-                files=files,
+                files=form_files,
                 timeout=timeout,
             )
 
