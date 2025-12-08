@@ -12,8 +12,8 @@ from typing import Optional
 # Default API endpoints
 DEFAULT_BASE_URL = "https://dev-chat.sketricgen.ai"
 DEFAULT_WORKFLOW_ENDPOINT = "/api/v1/run-workflow"
-DEFAULT_UPLOAD_INIT_ENDPOINT = "/api/v1/assets/init-upload"
-DEFAULT_UPLOAD_COMPLETE_ENDPOINT = "/api/v1/assets/complete-upload"
+DEFAULT_UPLOAD_INIT_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadInit"
+DEFAULT_UPLOAD_COMPLETE_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadComplete"
 
 # Timeouts
 DEFAULT_TIMEOUT = 30  # seconds
@@ -59,20 +59,17 @@ class SketricGenConfig:
     def from_env(
         cls,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
     ) -> "SketricGenConfig":
         """
         Load configuration from environment variables.
 
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required if not provided)
-            SKETRICGEN_BASE_URL: Base URL (optional)
             SKETRICGEN_TIMEOUT: Request timeout in seconds (optional)
             SKETRICGEN_MAX_RETRIES: Maximum retry attempts (optional)
 
         Args:
             api_key: Override API key from environment
-            base_url: Override base URL from environment
 
         Returns:
             SketricGenConfig instance
@@ -89,7 +86,6 @@ class SketricGenConfig:
 
         return cls(
             api_key=resolved_api_key,
-            base_url=base_url or os.getenv("SKETRICGEN_BASE_URL", DEFAULT_BASE_URL),
             timeout=int(os.getenv("SKETRICGEN_TIMEOUT", str(DEFAULT_TIMEOUT))),
             max_retries=int(os.getenv("SKETRICGEN_MAX_RETRIES", str(DEFAULT_MAX_RETRIES))),
         )
@@ -100,8 +96,8 @@ class SketricGenConfig:
 
     def get_upload_init_url(self) -> str:
         """Get full URL for upload init endpoint."""
-        return f"{self.base_url}{self.upload_init_endpoint}"
+        return self.upload_init_endpoint
 
     def get_upload_complete_url(self) -> str:
         """Get full URL for upload complete endpoint."""
-        return f"{self.base_url}{self.upload_complete_endpoint}"
+        return self.upload_complete_endpoint

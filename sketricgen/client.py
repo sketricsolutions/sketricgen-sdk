@@ -63,36 +63,24 @@ class SketricGenClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://api.sketricgen.com",
         timeout: int = 30,
         upload_timeout: int = 300,
         max_retries: int = 3,
-        workflow_endpoint: str = "/api/v1/run-workflow",
-        upload_init_endpoint: str = "/api/v1/assets/init-upload",
-        upload_complete_endpoint: str = "/api/v1/assets/complete-upload",
     ) -> None:
         """
         Initialize the SketricGen client.
 
         Args:
             api_key: Your SketricGen API key
-            base_url: Base URL for the API (default: production)
             timeout: Request timeout in seconds
             upload_timeout: Upload timeout in seconds (for large files)
             max_retries: Maximum number of retry attempts
-            workflow_endpoint: API endpoint for run-workflow
-            upload_init_endpoint: API Gateway endpoint for initiate upload
-            upload_complete_endpoint: API Gateway endpoint for complete upload
         """
         self._config = SketricGenConfig(
             api_key=api_key,
-            base_url=base_url,
             timeout=timeout,
             upload_timeout=upload_timeout,
             max_retries=max_retries,
-            workflow_endpoint=workflow_endpoint,
-            upload_init_endpoint=upload_init_endpoint,
-            upload_complete_endpoint=upload_complete_endpoint,
         )
 
     @classmethod
@@ -102,7 +90,6 @@ class SketricGenClient:
 
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required)
-            SKETRICGEN_BASE_URL: Base URL (optional)
             SKETRICGEN_TIMEOUT: Request timeout (optional)
             SKETRICGEN_MAX_RETRIES: Max retries (optional)
 
@@ -115,7 +102,6 @@ class SketricGenClient:
         config = SketricGenConfig.from_env()
         return cls(
             api_key=config.api_key,
-            base_url=kwargs.get("base_url", config.base_url),
             timeout=kwargs.get("timeout", config.timeout),
             max_retries=kwargs.get("max_retries", config.max_retries),
         )
