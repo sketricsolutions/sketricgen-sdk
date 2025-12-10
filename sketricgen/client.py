@@ -4,12 +4,11 @@ SketricGen SDK Client
 Main client class for interacting with the SketricGen Chat Server API.
 """
 
-import asyncio
 from typing import AsyncIterator, BinaryIO, Iterator, Optional, Union
 
 import httpx
 
-from sketricgen.config import SketricGenConfig
+from sketricgen.config import DEFAULT_BASE_URL, SketricGenConfig
 from sketricgen.exceptions import (
     SketricGenAPIError,
     SketricGenAuthenticationError,
@@ -63,6 +62,7 @@ class SketricGenClient:
     def __init__(
         self,
         api_key: str,
+        base_url: Optional[str] = None,
         timeout: int = 30,
         upload_timeout: int = 300,
         max_retries: int = 3,
@@ -72,12 +72,14 @@ class SketricGenClient:
 
         Args:
             api_key: Your SketricGen API key
+            base_url: Base URL for the API (optional, uses default if not provided)
             timeout: Request timeout in seconds
             upload_timeout: Upload timeout in seconds (for large files)
-            max_retries: Maximum number of retry attempts
+            max_retries: Maximum number of retry attempts (not currently used)
         """
         self._config = SketricGenConfig(
             api_key=api_key,
+            base_url=base_url or DEFAULT_BASE_URL,
             timeout=timeout,
             upload_timeout=upload_timeout,
             max_retries=max_retries,
@@ -90,7 +92,9 @@ class SketricGenClient:
 
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required)
+            SKETRICGEN_BASE_URL: Base URL (optional)
             SKETRICGEN_TIMEOUT: Request timeout (optional)
+            SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout (optional)
             SKETRICGEN_MAX_RETRIES: Max retries (optional)
 
         Args:
@@ -102,7 +106,9 @@ class SketricGenClient:
         config = SketricGenConfig.from_env()
         return cls(
             api_key=config.api_key,
+            base_url=kwargs.get("base_url", config.base_url),
             timeout=kwargs.get("timeout", config.timeout),
+            upload_timeout=kwargs.get("upload_timeout", config.upload_timeout),
             max_retries=kwargs.get("max_retries", config.max_retries),
         )
 

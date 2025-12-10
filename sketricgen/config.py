@@ -65,7 +65,9 @@ class SketricGenConfig:
 
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required if not provided)
+            SKETRICGEN_BASE_URL: Base URL (optional)
             SKETRICGEN_TIMEOUT: Request timeout in seconds (optional)
+            SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout in seconds (optional)
             SKETRICGEN_MAX_RETRIES: Maximum retry attempts (optional)
 
         Args:
@@ -86,7 +88,9 @@ class SketricGenConfig:
 
         return cls(
             api_key=resolved_api_key,
+            base_url=os.getenv("SKETRICGEN_BASE_URL", DEFAULT_BASE_URL),
             timeout=int(os.getenv("SKETRICGEN_TIMEOUT", str(DEFAULT_TIMEOUT))),
+            upload_timeout=int(os.getenv("SKETRICGEN_UPLOAD_TIMEOUT", str(DEFAULT_UPLOAD_TIMEOUT))),
             max_retries=int(os.getenv("SKETRICGEN_MAX_RETRIES", str(DEFAULT_MAX_RETRIES))),
         )
 
