@@ -54,16 +54,17 @@ async def workflow_error_handling():
             print(f"Details: {e.response_body}")
 
 
-async def upload_error_handling():
-    """Example: Handle errors when uploading assets."""
+async def file_upload_error_handling():
+    """Example: Handle errors when running workflows with file attachments."""
     client = SketricGenClient(api_key="your-api-key")
 
     try:
-        response = await client.upload_asset(
+        response = await client.run_workflow(
             agent_id="agent-123",
-            file_path="/path/to/file.pdf",
+            user_input="Analyze this document",
+            file_paths=["/path/to/file.pdf"],
         )
-        print(f"Uploaded: {response.file_id}")
+        print(f"Response: {response.response}")
 
     except SketricGenFileSizeError as e:
         # File exceeds 20 MB limit
@@ -82,7 +83,7 @@ async def upload_error_handling():
         print(f"Upload failed: {e}")
 
     except SketricGenValidationError as e:
-        # Missing file_name, empty file, etc.
+        # Empty file, etc.
         print(f"Validation error: {e}")
 
     except SketricGenAPIError as e:

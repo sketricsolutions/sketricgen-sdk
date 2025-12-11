@@ -34,46 +34,36 @@ async def run_workflow_streaming_example():
     print()  # New line at end
 
 
-async def upload_asset_example():
-    """Example: Upload an asset and use it in a workflow."""
+async def run_workflow_with_files_example():
+    """Example: Run a workflow with file attachments."""
     client = SketricGenClient(api_key="your-api-key")
 
-    # Upload a file - SDK handles all steps internally
-    upload_response = await client.upload_asset(
-        agent_id="agent-123",
-        file_path="/path/to/document.pdf",
-    )
-
-    print(f"Uploaded file ID: {upload_response.file_id}")
-    print(f"File size: {upload_response.file_size_bytes} bytes")
-    print(f"Access URL: {upload_response.url}")
-
-    # Use the uploaded file in a workflow
+    # Run workflow with file attachments
+    # Files are automatically uploaded in the background
     response = await client.run_workflow(
         agent_id="agent-123",
         user_input="Please analyze this document",
-        assets=[upload_response.file_id],
+        file_paths=["/path/to/document.pdf"],
     )
 
     print(f"Analysis: {response.response}")
 
 
-async def upload_from_bytes_example():
-    """Example: Upload from bytes."""
+async def run_workflow_with_multiple_files_example():
+    """Example: Run a workflow with multiple file attachments."""
     client = SketricGenClient(api_key="your-api-key")
 
-    # Read file as bytes
-    with open("/path/to/image.png", "rb") as f:
-        image_bytes = f.read()
-
-    # Upload from bytes (file_name is required)
-    response = await client.upload_asset(
+    # Multiple files can be attached at once
+    response = await client.run_workflow(
         agent_id="agent-123",
-        file_path=image_bytes,
-        file_name="image.png",
+        user_input="Compare these two documents",
+        file_paths=[
+            "/path/to/document1.pdf",
+            "/path/to/document2.pdf",
+        ],
     )
 
-    print(f"Uploaded: {response.file_id}")
+    print(f"Comparison: {response.response}")
 
 
 def sync_workflow_example():
@@ -88,16 +78,17 @@ def sync_workflow_example():
     print(f"Response: {response.response}")
 
 
-def sync_upload_example():
-    """Example: Upload an asset synchronously."""
+def sync_workflow_with_files_example():
+    """Example: Run a synchronous workflow with file attachments."""
     client = SketricGenClient(api_key="your-api-key")
 
-    response = client.upload_asset_sync(
+    response = client.run_workflow_sync(
         agent_id="agent-123",
-        file_path="/path/to/image.png",
+        user_input="Summarize this document",
+        file_paths=["/path/to/document.pdf"],
     )
 
-    print(f"Uploaded: {response.file_id}")
+    print(f"Summary: {response.response}")
 
 
 if __name__ == "__main__":

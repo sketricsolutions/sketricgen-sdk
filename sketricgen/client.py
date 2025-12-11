@@ -52,10 +52,11 @@ class SketricGenClient:
             conversation_id="conv-456"
         )
 
-        # Upload asset
-        upload_response = await client.upload_asset(
+        # Run workflow with file attachments
+        response = await client.run_workflow(
             agent_id="agent-123",
-            file_path="/path/to/document.pdf"
+            user_input="Analyze this document",
+            file_paths=["/path/to/document.pdf"]
         )
         ```
     """
@@ -157,7 +158,7 @@ class SketricGenClient:
         user_input: str,
         conversation_id: Optional[str] = None,
         contact_id: Optional[str] = None,
-        assets: Optional[list[str]] = None,
+        file_paths: Optional[list[str]] = None,
         stream: bool = False,
     ) -> Union[ChatResponse, AsyncIterator[StreamEvent]]:
         """
@@ -168,7 +169,7 @@ class SketricGenClient:
             user_input: User message (max 10000 characters)
             conversation_id: Optional conversation ID for resuming
             contact_id: Optional external contact ID
-            assets: Optional list of asset file IDs
+            file_paths: Optional list of file paths to upload and attach
             stream: Whether to stream the response
 
         Returns:
@@ -178,6 +179,8 @@ class SketricGenClient:
             SketricGenAPIError: For API errors
             SketricGenValidationError: For validation errors
             SketricGenNetworkError: For network errors
+            SketricGenFileSizeError: If a file exceeds size limit
+            SketricGenContentTypeError: If a file type is not supported
 
         Example:
             ```python
@@ -188,6 +191,13 @@ class SketricGenClient:
             )
             print(response.response)
 
+            # With file attachments
+            response = await client.run_workflow(
+                agent_id="agent-123",
+                user_input="Analyze this document",
+                file_paths=["/path/to/document.pdf"]
+            )
+
             # Streaming
             async for event in await client.run_workflow(
                 agent_id="agent-123",
@@ -197,13 +207,23 @@ class SketricGenClient:
                 print(event.data, end="", flush=True)
             ```
         """
+        # Upload files if provided
+        asset_ids: list[str] = []
+        if file_paths:
+            for file_path in file_paths:
+                upload_response = await self._upload_asset(
+                    agent_id=agent_id,
+                    file_path=file_path,
+                )
+                asset_ids.append(upload_response.file_id)
+
         try:
             request = RunWorkflowRequest(
                 agent_id=agent_id,
                 user_input=user_input,
                 conversation_id=conversation_id,
                 contact_id=contact_id,
-                assets=assets or [],
+                assets=asset_ids,
                 stream=stream,
             )
         except ValueError as e:
@@ -268,7 +288,7 @@ class SketricGenClient:
         user_input: str,
         conversation_id: Optional[str] = None,
         contact_id: Optional[str] = None,
-        assets: Optional[list[str]] = None,
+        file_paths: Optional[list[str]] = None,
         stream: bool = False,
     ) -> Union[ChatResponse, Iterator[StreamEvent]]:
         """
@@ -279,19 +299,36 @@ class SketricGenClient:
             user_input: User message (max 10000 characters)
             conversation_id: Optional conversation ID for resuming
             contact_id: Optional external contact ID
-            assets: Optional list of asset file IDs
+            file_paths: Optional list of file paths to upload and attach
             stream: Whether to stream the response
 
         Returns:
             ChatResponse if stream=False, Iterator[StreamEvent] if stream=True
+
+        Raises:
+            SketricGenAPIError: For API errors
+            SketricGenValidationError: For validation errors
+            SketricGenNetworkError: For network errors
+            SketricGenFileSizeError: If a file exceeds size limit
+            SketricGenContentTypeError: If a file type is not supported
         """
+        # Upload files if provided
+        asset_ids: list[str] = []
+        if file_paths:
+            for file_path in file_paths:
+                upload_response = self._upload_asset_sync(
+                    agent_id=agent_id,
+                    file_path=file_path,
+                )
+                asset_ids.append(upload_response.file_id)
+
         try:
             request = RunWorkflowRequest(
                 agent_id=agent_id,
                 user_input=user_input,
                 conversation_id=conversation_id,
                 contact_id=contact_id,
-                assets=assets or [],
+                assets=asset_ids,
                 stream=stream,
             )
         except ValueError as e:
@@ -462,7 +499,7 @@ class SketricGenClient:
         except httpx.HTTPError as e:
             raise SketricGenNetworkError(f"Network error: {e}") from e
 
-    async def upload_asset(
+    async def _upload_asset(
         self,
         agent_id: str,
         file_path: Union[str, bytes, BinaryIO],
@@ -470,9 +507,10 @@ class SketricGenClient:
         content_type: Optional[str] = None,
     ) -> CompleteUploadResponse:
         """
-        Upload an asset file to use in workflows.
+        Internal: Upload an asset file to use in workflows.
 
         This method handles the complete upload process internally.
+        Users should use file_paths parameter in run_workflow instead.
 
         Args:
             agent_id: Agent ID associated with the upload
@@ -487,16 +525,6 @@ class SketricGenClient:
             SketricGenAPIError: For API errors
             SketricGenValidationError: For validation errors
             SketricGenNetworkError: For network/upload errors
-
-        Example:
-            ```python
-            response = await client.upload_asset(
-                agent_id="agent-123",
-                file_path="/path/to/document.pdf"
-            )
-            print(f"File ID: {response.file_id}")
-            print(f"Access URL: {response.url}")
-            ```
         """
         # Determine file name if not provided
         if isinstance(file_path, str):
@@ -618,14 +646,14 @@ class SketricGenClient:
         except httpx.HTTPError as e:
             raise SketricGenNetworkError(f"Network error: {e}") from e
 
-    def upload_asset_sync(
+    def _upload_asset_sync(
         self,
         agent_id: str,
         file_path: Union[str, bytes, BinaryIO],
         file_name: Optional[str] = None,
         content_type: Optional[str] = None,
     ) -> CompleteUploadResponse:
-        """Synchronous version of upload_asset."""
+        """Internal synchronous version of upload_asset."""
         # Determine file name if not provided
         if isinstance(file_path, str):
             from pathlib import Path

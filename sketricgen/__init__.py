@@ -17,12 +17,13 @@ Example:
     )
     print(response.response)
 
-    # Upload asset
-    upload_response = await client.upload_asset(
+    # Run workflow with file attachments
+    response = await client.run_workflow(
         agent_id="agent-123",
-        file_path="/path/to/document.pdf"
+        user_input="Analyze this document",
+        file_paths=["/path/to/document.pdf"]
     )
-    print(f"Uploaded: {upload_response.file_id}")
+    print(response.response)
     ```
 """
 
@@ -41,7 +42,6 @@ from sketricgen.exceptions import (
 )
 from sketricgen.models.responses import (
     ChatResponse,
-    CompleteUploadResponse as UploadResponse,
     StreamEvent,
 )
 
@@ -65,5 +65,4 @@ __all__ = [
     # Response Models
     "ChatResponse",
     "StreamEvent",
-    "UploadResponse",
 ]
