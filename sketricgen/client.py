@@ -92,6 +92,7 @@ class SketricGenClient:
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required)
             SKETRICGEN_TIMEOUT: Request timeout (optional)
+            SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout (optional)
             SKETRICGEN_MAX_RETRIES: Max retries (optional)
 
         Args:
@@ -104,6 +105,7 @@ class SketricGenClient:
         return cls(
             api_key=config.api_key,
             timeout=kwargs.get("timeout", config.timeout),
+            upload_timeout=kwargs.get("upload_timeout", config.upload_timeout),
             max_retries=kwargs.get("max_retries", config.max_retries),
         )
 
@@ -207,15 +209,15 @@ class SketricGenClient:
                 print(event.data, end="", flush=True)
             ```
         """
-        # Upload files if provided
+        # Upload files in parallel if provided
         asset_ids: list[str] = []
         if file_paths:
-            for file_path in file_paths:
-                upload_response = await self._upload_asset(
-                    agent_id=agent_id,
-                    file_path=file_path,
-                )
-                asset_ids.append(upload_response.file_id)
+            upload_tasks = [
+                self._upload_asset(agent_id=agent_id, file_path=file_path)
+                for file_path in file_paths
+            ]
+            upload_responses = await asyncio.gather(*upload_tasks)
+            asset_ids = [resp.file_id for resp in upload_responses]
 
         try:
             request = RunWorkflowRequest(
@@ -312,15 +314,17 @@ class SketricGenClient:
             SketricGenFileSizeError: If a file exceeds size limit
             SketricGenContentTypeError: If a file type is not supported
         """
-        # Upload files if provided
+        # Upload files in parallel if provided
         asset_ids: list[str] = []
         if file_paths:
-            for file_path in file_paths:
-                upload_response = self._upload_asset_sync(
-                    agent_id=agent_id,
-                    file_path=file_path,
-                )
-                asset_ids.append(upload_response.file_id)
+            from concurrent.futures import ThreadPoolExecutor
+
+            def upload_file(file_path: str) -> str:
+                response = self._upload_asset_sync(agent_id=agent_id, file_path=file_path)
+                return response.file_id
+
+            with ThreadPoolExecutor(max_workers=min(len(file_paths), 5)) as executor:
+                asset_ids = list(executor.map(upload_file, file_paths))
 
         try:
             request = RunWorkflowRequest(

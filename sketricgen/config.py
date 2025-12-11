@@ -16,7 +16,7 @@ DEFAULT_UPLOAD_INIT_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazona
 DEFAULT_UPLOAD_COMPLETE_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadComplete"
 
 # Timeouts
-DEFAULT_TIMEOUT = 30  # seconds
+DEFAULT_TIMEOUT = 300  # seconds
 DEFAULT_UPLOAD_TIMEOUT = 300  # 5 minutes for large files
 
 # Retry settings
@@ -66,6 +66,7 @@ class SketricGenConfig:
         Environment Variables:
             SKETRICGEN_API_KEY: API key (required if not provided)
             SKETRICGEN_TIMEOUT: Request timeout in seconds (optional)
+            SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout in seconds (optional)
             SKETRICGEN_MAX_RETRIES: Maximum retry attempts (optional)
 
         Args:
@@ -87,6 +88,7 @@ class SketricGenConfig:
         return cls(
             api_key=resolved_api_key,
             timeout=int(os.getenv("SKETRICGEN_TIMEOUT", str(DEFAULT_TIMEOUT))),
+            upload_timeout=int(os.getenv("SKETRICGEN_UPLOAD_TIMEOUT", str(DEFAULT_UPLOAD_TIMEOUT))),
             max_retries=int(os.getenv("SKETRICGEN_MAX_RETRIES", str(DEFAULT_MAX_RETRIES))),
         )
 

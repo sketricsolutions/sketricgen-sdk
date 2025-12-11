@@ -22,6 +22,8 @@ async def run_workflow_example():
 
 async def run_workflow_streaming_example():
     """Example: Run a workflow with streaming."""
+    import json
+    
     client = SketricGenClient(api_key="your-api-key")
 
     print("Streaming response:")
@@ -30,8 +32,13 @@ async def run_workflow_streaming_example():
         user_input="Tell me a short story",
         stream=True,
     ):
-        print(event.data, end="", flush=True)
-    print()  # New line at end
+        data = json.loads(event.data)
+        
+        if data["type"] == "TEXT_MESSAGE_CONTENT":
+            # Print text chunks as they arrive
+            print(data["delta"], end="", flush=True)
+        elif data["type"] == "RUN_FINISHED":
+            print()  # New line at end
 
 
 async def run_workflow_with_files_example():
