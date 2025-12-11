@@ -35,7 +35,7 @@ print(response.response)
 
 - **Run Workflow**: Execute chat/workflow requests with agents
 - **Streaming**: Real-time streaming responses using Server-Sent Events
-- **Asset Upload**: Upload files (images, PDFs) to use in workflows
+- **File Attachments**: Attach files (images, PDFs) to workflows seamlessly
 - **Async & Sync**: Both async and synchronous API support
 - **Type Safety**: Full type hints for IDE support
 - **Error Handling**: Comprehensive custom exception types
@@ -89,81 +89,46 @@ for event in client.run_workflow_sync(
     print(event.data, end="", flush=True)
 ```
 
-### Upload Asset
+### Workflow with File Attachments
 
-Upload files to use in your workflows. The SDK handles the entire upload process internally.
-
-```python
-from sketricgen import SketricGenClient
-
-client = SketricGenClient(api_key="your-api-key")
-
-# Upload from file path (async)
-response = await client.upload_asset(
-    agent_id="agent-123",
-    file_path="/path/to/document.pdf",
-)
-print(f"File ID: {response.file_id}")
-print(f"Access URL: {response.url}")
-
-# Upload from file path (sync)
-response = client.upload_asset_sync(
-    agent_id="agent-123",
-    file_path="/path/to/image.png",
-)
-```
-
-### Upload from Bytes
+Attach files to your workflows. The SDK handles file uploads automatically in the background.
 
 ```python
 from sketricgen import SketricGenClient
 
 client = SketricGenClient(api_key="your-api-key")
 
-# Upload from bytes (file_name is required)
-image_bytes = open("image.png", "rb").read()
-response = await client.upload_asset(
-    agent_id="agent-123",
-    file_path=image_bytes,
-    file_name="image.png",
-)
-print(f"Uploaded: {response.file_id}")
-```
-
-### Upload from File-like Object
-
-```python
-from sketricgen import SketricGenClient
-
-client = SketricGenClient(api_key="your-api-key")
-
-# Upload from file object
-with open("document.pdf", "rb") as f:
-    response = await client.upload_asset(
-        agent_id="agent-123",
-        file_path=f,
-        file_name="document.pdf",
-    )
-```
-
-### Using Uploaded Assets in Workflows
-
-```python
-from sketricgen import SketricGenClient
-
-client = SketricGenClient(api_key="your-api-key")
-
-# Upload an asset
-upload = await client.upload_asset(
-    agent_id="agent-123",
-    file_path="/path/to/document.pdf",
-)
-
-# Use in workflow
+# Async with file attachment
 response = await client.run_workflow(
     agent_id="agent-123",
     user_input="Please analyze this document",
-    assets=[upload.file_id],  # Include the uploaded file
+    file_paths=["/path/to/document.pdf"],
+)
+print(response.response)
+
+# Sync with file attachment
+response = client.run_workflow_sync(
+    agent_id="agent-123",
+    user_input="Summarize this document",
+    file_paths=["/path/to/document.pdf"],
+)
+```
+
+### Multiple File Attachments
+
+```python
+from sketricgen import SketricGenClient
+
+client = SketricGenClient(api_key="your-api-key")
+
+# Attach multiple files at once
+response = await client.run_workflow(
+    agent_id="agent-123",
+    user_input="Compare these two documents",
+    file_paths=[
+        "/path/to/document1.pdf",
+        "/path/to/document2.pdf",
+    ],
 )
 print(response.response)
 ```
@@ -184,9 +149,10 @@ from sketricgen import (
 client = SketricGenClient(api_key="your-api-key")
 
 try:
-    response = await client.upload_asset(
+    response = await client.run_workflow(
         agent_id="agent-123",
-        file_path="/path/to/file.pdf",
+        user_input="Analyze this document",
+        file_paths=["/path/to/file.pdf"],
     )
 except SketricGenAuthenticationError as e:
     print(f"Authentication failed: {e}")
@@ -202,6 +168,8 @@ except SketricGenAPIError as e:
     print(f"API error ({e.status_code}): {e}")
 except SketricGenNetworkError as e:
     print(f"Network error: {e}")
+except FileNotFoundError as e:
+    print(f"File not found: {e}")
 ```
 
 ### Configuration
@@ -212,20 +180,19 @@ from sketricgen import SketricGenClient
 # Direct configuration
 client = SketricGenClient(
     api_key="your-api-key",
-    base_url="https://api.sketricgen.com",
     timeout=30,
     upload_timeout=300,  # 5 minutes for large files
     max_retries=3,
 )
 
 # From environment variables
-# Set SKETRICGEN_API_KEY, SKETRICGEN_BASE_URL (optional)
+# Set SKETRICGEN_API_KEY
 client = SketricGenClient.from_env()
 ```
 
 ## Supported File Types
 
-For asset uploads, the following content types are supported:
+For file attachments, the following content types are supported:
 
 - `image/jpeg`
 - `image/png`
@@ -239,7 +206,7 @@ Maximum file size: **20 MB**
 
 ### SketricGenClient
 
-#### `run_workflow(agent_id, user_input, conversation_id?, contact_id?, assets?, stream?)`
+#### `run_workflow(agent_id, user_input, conversation_id?, contact_id?, file_paths?, stream?)`
 
 Execute a workflow/chat request.
 
@@ -248,22 +215,10 @@ Execute a workflow/chat request.
 - `user_input` (str): User message (max 10000 characters)
 - `conversation_id` (str, optional): Conversation ID for resuming
 - `contact_id` (str, optional): External contact ID
-- `assets` (list[str], optional): List of asset file IDs
+- `file_paths` (list[str], optional): List of file paths to upload and attach
 - `stream` (bool, optional): Whether to stream the response
 
 **Returns:** `ChatResponse` or `AsyncIterator[StreamEvent]` if streaming
-
-#### `upload_asset(agent_id, file_path, file_name?, content_type?)`
-
-Upload a file to use in workflows.
-
-**Parameters:**
-- `agent_id` (str): Agent ID associated with the upload
-- `file_path` (str | bytes | BinaryIO): File path, bytes, or file-like object
-- `file_name` (str, optional): File name (required for bytes/file-like objects)
-- `content_type` (str, optional): MIME type override
-
-**Returns:** `UploadResponse` with file details and access URL
 
 ### Response Models
 
@@ -280,20 +235,10 @@ Upload a file to use in workflows.
 - `data`: Event content
 - `id`: Optional event ID
 
-#### `UploadResponse`
-- `success`: Whether upload succeeded
-- `file_id`: Unique file identifier
-- `file_size_bytes`: Size of uploaded file
-- `content_type`: MIME type
-- `file_name`: File name
-- `created_at`: Creation timestamp
-- `url`: Presigned access URL (valid for 3 days)
-
 ### Sync Methods
 
-All async methods have `_sync` variants:
+The async `run_workflow()` method has a synchronous variant:
 - `run_workflow_sync()`
-- `upload_asset_sync()`
 
 ## License
 
