@@ -68,6 +68,7 @@ response = client.run_workflow_sync(
 ### Streaming Workflow
 
 ```python
+import json
 from sketricgen import SketricGenClient
 
 client = SketricGenClient(api_key="your-api-key")
@@ -78,7 +79,20 @@ async for event in await client.run_workflow(
     user_input="Tell me a story",
     stream=True,
 ):
-    print(event.data, end="", flush=True)
+    data = json.loads(event.data)
+    event_type = data["type"]
+    
+    if event_type == "TEXT_MESSAGE_CONTENT":
+        # Print text chunks as they arrive
+        print(data["delta"], end="", flush=True)
+    elif event_type == "TOOL_CALL_START":
+        print(f"\n[Calling tool: {data['tool_call_name']}]")
+    elif event_type == "TOOL_CALL_END":
+        print(f"[Tool completed]")
+    elif event_type == "RUN_FINISHED":
+        print()  # New line
+    elif event_type == "RUN_ERROR":
+        print(f"\nError: {data['message']}")
 
 # Sync streaming
 for event in client.run_workflow_sync(
@@ -86,8 +100,26 @@ for event in client.run_workflow_sync(
     user_input="Tell me a story",
     stream=True,
 ):
-    print(event.data, end="", flush=True)
+    data = json.loads(event.data)
+    if data["type"] == "TEXT_MESSAGE_CONTENT":
+        print(data["delta"], end="", flush=True)
 ```
+
+**Stream Event Types (AG-UI Protocol):**
+
+The streaming API uses [AG-UI](https://docs.ag-ui.com) events from `ag_ui.core`:
+
+| Event Type | Description | Key Fields |
+|------------|-------------|------------|
+| `RUN_STARTED` | Workflow execution started | `thread_id`, `run_id` |
+| `TEXT_MESSAGE_START` | Assistant message started | `message_id`, `role` |
+| `TEXT_MESSAGE_CONTENT` | Text chunk | `message_id`, `delta` |
+| `TEXT_MESSAGE_END` | Assistant message completed | `message_id` |
+| `TOOL_CALL_START` | Tool/function call started | `tool_call_id`, `tool_call_name` |
+| `TOOL_CALL_END` | Tool/function call completed | `tool_call_id` |
+| `RUN_FINISHED` | Workflow completed | `thread_id`, `run_id`, `result` |
+| `RUN_ERROR` | Workflow error occurred | `message` |
+| `CUSTOM` | Custom event | varies |
 
 ### Workflow with File Attachments
 
@@ -231,7 +263,7 @@ Execute a workflow/chat request.
 - `error`: Error flag
 
 #### `StreamEvent`
-- `event_type`: Type of event
+- `type`: Type of event
 - `data`: Event content
 - `id`: Optional event ID
 
