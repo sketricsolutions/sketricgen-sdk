@@ -10,10 +10,10 @@ from typing import Optional
 
 
 # Default API endpoints
-DEFAULT_BASE_URL = "https://dev-chat.sketricgen.ai"
+DEFAULT_BASE_URL = "https://chat-v2.sketricgen.ai"
 DEFAULT_WORKFLOW_ENDPOINT = "/api/v1/run-workflow"
-DEFAULT_UPLOAD_INIT_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadInit"
-DEFAULT_UPLOAD_COMPLETE_ENDPOINT = "https://0uwfaq2dke.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadComplete"
+DEFAULT_UPLOAD_INIT_ENDPOINT = "https://v9xof9ohlg.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadInit"
+DEFAULT_UPLOAD_COMPLETE_ENDPOINT = "https://v9xof9ohlg.execute-api.us-east-1.amazonaws.com/dev/publicAssetsUploadComplete"
 
 # Timeouts
 DEFAULT_TIMEOUT = 300  # seconds

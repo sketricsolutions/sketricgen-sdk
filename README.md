@@ -11,7 +11,8 @@ pip install sketricgen
 Or install from source:
 
 ```bash
-cd sketric_sdk
+git clone https://github.com/sketricsolutions/sketricgen-sdk.git
+cd sketricgen-sdk
 pip install -e .
 ```
 
