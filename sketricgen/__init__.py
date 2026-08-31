@@ -27,14 +27,17 @@ Example:
     ```
 """
 
+from sketricgen.admin import AdminClient
 from sketricgen.client import SketricGenClient
 from sketricgen.config import SketricGenConfig
 from sketricgen.exceptions import (
+    SketricGenAdminError,
     SketricGenAPIError,
     SketricGenAuthenticationError,
     SketricGenContentTypeError,
     SketricGenError,
     SketricGenFileSizeError,
+    SketricGenJobError,
     SketricGenNetworkError,
     SketricGenTimeoutError,
     SketricGenUploadError,
@@ -45,17 +48,20 @@ from sketricgen.models.responses import (
     StreamEvent,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
-    # Client
+    # Clients
     "SketricGenClient",
+    "AdminClient",
     # Config
     "SketricGenConfig",
     # Exceptions
     "SketricGenError",
     "SketricGenAPIError",
     "SketricGenAuthenticationError",
+    "SketricGenAdminError",
+    "SketricGenJobError",
     "SketricGenValidationError",
     "SketricGenNetworkError",
     "SketricGenTimeoutError",

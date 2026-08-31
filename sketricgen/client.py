@@ -90,7 +90,7 @@ class SketricGenClient:
         Create a client from environment variables.
 
         Environment Variables:
-            SKETRICGEN_API_KEY: API key (required)
+            SKETRICGEN_RUNTIME_API_KEY: API key (required)
             SKETRICGEN_TIMEOUT: Request timeout (optional)
             SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout (optional)
             SKETRICGEN_MAX_RETRIES: Max retries (optional)

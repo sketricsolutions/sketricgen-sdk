@@ -219,7 +219,7 @@ client = SketricGenClient(
 )
 
 # From environment variables
-# Set SKETRICGEN_API_KEY
+# Set SKETRICGEN_RUNTIME_API_KEY
 client = SketricGenClient.from_env()
 ```
 

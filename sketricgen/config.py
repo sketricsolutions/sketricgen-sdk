@@ -64,7 +64,7 @@ class SketricGenConfig:
         Load configuration from environment variables.
 
         Environment Variables:
-            SKETRICGEN_API_KEY: API key (required if not provided)
+            SKETRICGEN_RUNTIME_API_KEY: API key (required if not provided)
             SKETRICGEN_TIMEOUT: Request timeout in seconds (optional)
             SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout in seconds (optional)
             SKETRICGEN_MAX_RETRIES: Maximum retry attempts (optional)
@@ -78,11 +78,11 @@ class SketricGenConfig:
         Raises:
             ValueError: If API key is not provided or found in environment
         """
-        resolved_api_key = api_key or os.getenv("SKETRICGEN_API_KEY")
+        resolved_api_key = api_key or os.getenv("SKETRICGEN_RUNTIME_API_KEY")
         if not resolved_api_key:
             raise ValueError(
-                "API key is required. Set SKETRICGEN_API_KEY environment variable "
-                "or provide api_key parameter."
+                "API key is required. Set SKETRICGEN_RUNTIME_API_KEY environment "
+                "variable or provide api_key parameter."
             )
 
         return cls(
