@@ -35,6 +35,7 @@ print(response.response)
 ## Features
 
 - **Run Workflow**: Execute chat/workflow requests with agents
+- **Control Plane**: Manage projects, agents, knowledge bases, brand agents, and connectors via `AdminClient` (see [Control Plane — AdminClient](#control-plane--adminclient))
 - **Streaming**: Real-time streaming responses using Server-Sent Events
 - **File Attachments**: Attach files (images, PDFs) to workflows seamlessly
 - **Async & Sync**: Both async and synchronous API support
@@ -272,6 +273,211 @@ Execute a workflow/chat request.
 
 The async `run_workflow()` method has a synchronous variant:
 - `run_workflow_sync()`
+
+## Control Plane — AdminClient
+
+`SketricGenClient` talks to the **data plane** (running workflows). To *manage*
+resources — teamspace identity, projects, agents, knowledge bases, brand agents,
+and connectors — use `AdminClient`, which talks to the **control plane** (the
+Teamspace v2 Admin API).
+
+The two clients use different credentials and are **not interchangeable**:
+
+| | `SketricGenClient` (data plane) | `AdminClient` (control plane) |
+|---|---|---|
+| Purpose | Run workflows, upload files | Manage resources |
+| Credential | Runtime key (`sk_runtime_…`) | Admin key (`sk_admin_…`) |
+| Env var | `SKETRICGEN_RUNTIME_API_KEY` | `SKETRICGEN_ADMIN_API_KEY` |
+| Auth header | `API-KEY` | `Authorization: Bearer` |
+| Base URL | Configurable | Shipped with the SDK |
+
+### Construction
+
+```python
+from sketricgen import AdminClient
+
+# Reads the admin key from SKETRICGEN_ADMIN_API_KEY
+admin = AdminClient()
+
+# Or pass the key explicitly
+admin = AdminClient(api_key="sk_admin_...")
+```
+
+The control-plane base URL is **built into the SDK** — you supply only your admin
+key, never a hostname. A `base_url=` argument is available for testing or
+self-hosting, but there is intentionally no environment-variable path for it:
+
+```python
+admin = AdminClient(base_url="https://sandbox.example.com/admin/v1")
+```
+
+A missing admin key fails closed immediately:
+
+```python
+AdminClient(api_key=None)  # raises ValueError if SKETRICGEN_ADMIN_API_KEY is unset
+```
+
+Every method is **async-first with a synchronous `_sync` twin**, matching
+`SketricGenClient`.
+
+### whoami
+
+```python
+# Async
+me = await admin.whoami()
+print(me.teamspace_id, me.display_name)
+
+# Sync
+me = admin.whoami_sync()
+```
+
+### Listing resources
+
+`projects.list()`, `agents.list()`, and `knowledge_bases.list()` **transparently
+page through every result** — you never manage a `next_token` cursor. They return
+a lazy iterator, so only the pages you consume are fetched:
+
+```python
+# Async — lazy async iterator
+async for project in admin.projects.list():
+    print(project.project_id, project.display_name)
+
+async for agent in admin.agents.list():
+    print(agent.agent_id, agent.name)
+
+async for kb in admin.knowledge_bases.list():
+    print(kb.knowledge_base_id, kb.name)
+
+# Sync — lazy iterator
+for project in admin.projects.list_sync():
+    print(project.project_id)
+for agent in admin.agents.list_sync():
+    print(agent.agent_id)
+for kb in admin.knowledge_bases.list_sync():
+    print(kb.knowledge_base_id)
+```
+
+### Brand agents
+
+Brand-agent provisioning is asynchronous on the server. Use `create_and_wait()`
+for the one-call path, or drive the `create()` / `get_status()` primitives
+yourself.
+
+```python
+# One call: create and poll to completion
+job = await admin.brand_agents.create_and_wait(
+    name="Acme Support",
+    seed_url="https://acme.example.com",
+    poll_interval=10.0,   # seconds between polls
+    timeout=600.0,        # give up after this many seconds
+)
+print(job.status)              # "succeeded"
+print(job.embed.snippet)       # embed code for the finished agent
+
+# Or drive the async flow yourself
+job = await admin.brand_agents.create(
+    name="Acme Support",
+    seed_url="https://acme.example.com",
+)
+status = await admin.brand_agents.get_status(job.job_id)
+print(status.status, status.phase)
+
+# Browse the template catalog
+templates = await admin.brand_agents.list_templates()
+
+# Inspect and edit an existing brand agent
+detail = await admin.brand_agents.get(agent_id)
+result = await admin.brand_agents.update(
+    agent_id,
+    display_name="Acme Assistant",
+    instructions="Be concise.",
+    model="gpt-4o",
+    knowledge_base_ids=["kb-123"],
+)
+
+# Widget configuration
+config = await admin.brand_agents.get_widget_config(agent_id)
+await admin.brand_agents.update_widget_config(agent_id, primary_color="#0055FF")
+
+# Sync
+job = admin.brand_agents.create_and_wait_sync(
+    name="Acme Support", seed_url="https://acme.example.com",
+)
+templates = admin.brand_agents.list_templates_sync()
+```
+
+`create_and_wait()` raises `SketricGenJobError` if the job fails and
+`SketricGenTimeoutError` if it does not reach a terminal state within `timeout` —
+a failed provision is never silently treated as success. Sync twins:
+`create_and_wait_sync()`, `create_sync()`, `get_status_sync()`, `get_sync()`,
+`update_sync()`, `list_templates_sync()`, `get_widget_config_sync()`,
+`update_widget_config_sync()`.
+
+### Connectors
+
+```python
+# Curated brand-connector catalog
+connectors = await admin.connectors.list()
+
+# Grantable tool names for one connector
+tools = await admin.connectors.list_tools("gmail")
+
+# Mint a hosted consent URL, then poll until a human finishes connecting
+link = await admin.connectors.create_link("gmail", project_id="proj-123")
+print(link.connect_url)
+status = await admin.connectors.check_connection("gmail", project_id="proj-123")
+print(status.connected)
+
+# Attach a connector's tools to an agent, or detach it
+await admin.connectors.attach(agent_id, "gmail", allowed_tools=["send_email"])
+await admin.connectors.detach(agent_id, "gmail")
+
+# Sync
+connectors = admin.connectors.list_sync()
+admin.connectors.attach_sync(agent_id, "gmail", allowed_tools=["send_email"])
+```
+
+Attach/detach are grouped under `connectors` (connector-centric) even though the
+underlying route lives under `/agents`. Sync twins: `list_sync()`,
+`list_tools_sync()`, `create_link_sync()`, `check_connection_sync()`,
+`attach_sync()`, `detach_sync()`.
+
+### Error handling
+
+Control-plane errors carry a machine-readable `code`, so you can branch on the
+failure kind instead of parsing message strings:
+
+```python
+from sketricgen import (
+    AdminClient,
+    SketricGenAdminError,
+    SketricGenAuthenticationError,
+    SketricGenJobError,
+    SketricGenError,
+)
+
+admin = AdminClient()
+
+try:
+    job = await admin.brand_agents.create_and_wait(
+        name="Acme", seed_url="https://acme.example.com",
+    )
+except SketricGenAuthenticationError:
+    print("Admin key rejected (401)")
+except SketricGenJobError as e:
+    print(f"Provisioning failed for job {e.job_id}: {e.error_summary}")
+except SketricGenAdminError as e:
+    if e.code == "agent_limit_reached":
+        print("Out of agent quota")
+    else:
+        print(f"Admin API error [{e.status_code}] {e.code}: {e}")
+except SketricGenError as e:
+    # Base class — catches anything the SDK raises, data plane or control plane
+    print(f"SDK error: {e}")
+```
+
+Response models tolerate unknown fields, so a server-side field addition never
+breaks a pinned SDK version.
 
 ## License
 
