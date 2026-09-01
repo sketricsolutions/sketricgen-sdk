@@ -76,3 +76,10 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The live probe (tests/live/) hits the real dev control/data planes and dev
+# DynamoDB. It is deselected by default so a plain `pytest` (and CI) never runs
+# it; run it explicitly with `pytest -m live` after exporting the keys.
+addopts = "-m 'not live'"
+markers = [
+    "live: manually-run integration probe against the dev environment (needs real keys + AWS); never runs in CI",
+]
