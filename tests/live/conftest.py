@@ -22,6 +22,7 @@ from sketricgen import AdminClient, SketricGenClient
 
 from .dynamo import DynamoProbe, DynamoUnavailable
 from .fixtures import (
+    DEV_ADMIN_BASE_URL,
     DEV_CHAT_BASE_URL,
     DEV_UPLOAD_COMPLETE_URL,
     DEV_UPLOAD_INIT_URL,
@@ -54,8 +55,12 @@ def runtime_key() -> str:
 
 @pytest.fixture(scope="session")
 def admin(admin_key: str) -> AdminClient:
-    """Admin client against the SDK's baked-in dev control-plane default."""
-    return AdminClient(api_key=admin_key)
+    """Admin client pinned at the dev control plane.
+
+    The shipped ``DEFAULT_ADMIN_BASE_URL`` targets prod, so the probe overrides
+    it to dev explicitly rather than relying on the default.
+    """
+    return AdminClient(api_key=admin_key, base_url=DEV_ADMIN_BASE_URL)
 
 
 @pytest.fixture(scope="session")

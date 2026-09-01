@@ -47,8 +47,9 @@ from sketricgen.exceptions import (
 # The control-plane host is shipped with the SDK; the consumer supplies only a
 # key. A per-deploy execute-api host — if production runs a different API id,
 # only this constant changes. There is intentionally no env-var path for it.
+# (The stage segment is named `dev` even in production, per the backend wiring.)
 DEFAULT_ADMIN_BASE_URL = (
-    "https://krjavjkt27.execute-api.us-east-1.amazonaws.com/dev/admin/v1"
+    "https://v9xof9ohlg.execute-api.us-east-1.amazonaws.com/dev/admin/v1"
 )
 
 DEFAULT_TIMEOUT = 30
