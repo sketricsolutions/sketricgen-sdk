@@ -3,7 +3,9 @@ Basic usage examples for the SketricGen SDK.
 """
 
 import asyncio
-from sketricgen import SketricGenClient
+import json
+
+from sketricgen import HitlDecision, HitlResume, SketricGenClient
 
 
 async def run_workflow_example():
@@ -22,8 +24,6 @@ async def run_workflow_example():
 
 async def run_workflow_streaming_example():
     """Example: Run a workflow with streaming."""
-    import json
-    
     client = SketricGenClient(api_key="your-api-key")
 
     print("Streaming response:")
@@ -33,7 +33,6 @@ async def run_workflow_streaming_example():
         stream=True,
     ):
         data = json.loads(event.data)
-        
         if data["type"] == "TEXT_MESSAGE_CONTENT":
             # Print text chunks as they arrive
             print(data["delta"], end="", flush=True)
@@ -71,6 +70,35 @@ async def run_workflow_with_multiple_files_example():
     )
 
     print(f"Comparison: {response.response}")
+
+
+async def hitl_example():
+    """Example: Enable and resume human-in-the-loop execution."""
+    client = SketricGenClient(api_key="sk_api_...")
+    paused = await client.run_workflow(
+        agent_id="agent-123",
+        user_input="Schedule a recurring report",
+        enable_hitl=True,
+    )
+    if paused.run_paused_hitl and paused.hitl_request:
+        await client.run_workflow(
+            agent_id="agent-123",
+            conversation_id=paused.conversation_id,
+            enable_hitl=True,
+            hitl_resume=HitlResume(
+                request_id=paused.hitl_request.request_id,
+                decisions=[HitlDecision(type="approve")],
+            ),
+        )
+
+
+async def admin_example():
+    """Example: Use the same client for control-plane operations."""
+    client = SketricGenClient(api_key="sk_api_...")
+    me = await client.whoami()
+    print(me.display_name)
+    async for project in client.projects.list():
+        print(project.display_name)
 
 
 def sync_workflow_example():

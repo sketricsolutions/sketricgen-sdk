@@ -4,13 +4,13 @@ import httpx
 import pytest
 import respx
 
-from sketricgen import AdminClient, SketricGenJobError, SketricGenTimeoutError
+from sketricgen import SketricGenClient, SketricGenJobError, SketricGenTimeoutError
 
 from .conftest import BASE_URL, request_body
 
 
 @respx.mock
-async def test_list_templates(admin: AdminClient) -> None:
+async def test_list_templates(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/brand-agent-templates").mock(
         return_value=httpx.Response(
             200,
@@ -34,7 +34,7 @@ async def test_list_templates(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_list_templates_sync(admin: AdminClient) -> None:
+def test_list_templates_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/brand-agent-templates").mock(
         return_value=httpx.Response(
             200, json={"brand_agent_templates": [{"slug": "faq"}]}
@@ -45,7 +45,7 @@ def test_list_templates_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_create_returns_job_handle(admin: AdminClient) -> None:
+async def test_create_returns_job_handle(admin: SketricGenClient) -> None:
     route = respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(
             202,
@@ -78,7 +78,7 @@ async def test_create_returns_job_handle(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_create_sync(admin: AdminClient) -> None:
+def test_create_sync(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(
             202, json={"agent_id": "skbrand_2", "job_id": "job_2"}
@@ -89,7 +89,7 @@ def test_create_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_get_status(admin: AdminClient) -> None:
+async def test_get_status(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/jobs/job_1").mock(
         return_value=httpx.Response(
             200, json={"job_id": "job_1", "status": "crawling", "phase": "crawl"}
@@ -103,7 +103,7 @@ async def test_get_status(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_create_and_wait_success(admin: AdminClient) -> None:
+async def test_create_and_wait_success(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(
             202, json={"agent_id": "skbrand_3", "job_id": "job_3"}
@@ -141,7 +141,7 @@ async def test_create_and_wait_success(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_create_and_wait_raises_on_failure(admin: AdminClient) -> None:
+async def test_create_and_wait_raises_on_failure(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(202, json={"agent_id": "s4", "job_id": "job_4"})
     )
@@ -170,7 +170,7 @@ async def test_create_and_wait_raises_on_failure(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_create_and_wait_times_out(admin: AdminClient) -> None:
+async def test_create_and_wait_times_out(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(202, json={"agent_id": "s5", "job_id": "job_5"})
     )
@@ -185,7 +185,7 @@ async def test_create_and_wait_times_out(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_create_and_wait_sync_success(admin: AdminClient) -> None:
+def test_create_and_wait_sync_success(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/brand-agents").mock(
         return_value=httpx.Response(202, json={"agent_id": "s6", "job_id": "job_6"})
     )
@@ -203,7 +203,7 @@ def test_create_and_wait_sync_success(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_get_brand_agent(admin: AdminClient) -> None:
+async def test_get_brand_agent(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/brand-agents/skbrand_1").mock(
         return_value=httpx.Response(
             200,
@@ -224,7 +224,7 @@ async def test_get_brand_agent(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_update_sends_only_supplied_fields(admin: AdminClient) -> None:
+async def test_update_sends_only_supplied_fields(admin: SketricGenClient) -> None:
     route = respx.patch(f"{BASE_URL}/brand-agents/skbrand_1").mock(
         return_value=httpx.Response(
             200,
@@ -253,7 +253,7 @@ async def test_update_sends_only_supplied_fields(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_update_sync(admin: AdminClient) -> None:
+def test_update_sync(admin: SketricGenClient) -> None:
     respx.patch(f"{BASE_URL}/brand-agents/skbrand_2").mock(
         return_value=httpx.Response(200, json={"updated": ["model"]})
     )
@@ -262,7 +262,7 @@ def test_update_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_get_widget_config(admin: AdminClient) -> None:
+async def test_get_widget_config(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/brand-agents/skbrand_1/widget-config").mock(
         return_value=httpx.Response(
             200,
@@ -286,7 +286,7 @@ async def test_get_widget_config(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_update_widget_config(admin: AdminClient) -> None:
+async def test_update_widget_config(admin: SketricGenClient) -> None:
     route = respx.patch(f"{BASE_URL}/brand-agents/skbrand_1/widget-config").mock(
         return_value=httpx.Response(
             200,
@@ -305,7 +305,7 @@ async def test_update_widget_config(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_update_widget_config_sync(admin: AdminClient) -> None:
+def test_update_widget_config_sync(admin: SketricGenClient) -> None:
     respx.patch(f"{BASE_URL}/brand-agents/s2/widget-config").mock(
         return_value=httpx.Response(
             200, json={"agent_id": "s2", "updated": ["isPublic"], "widget_config": {}}

@@ -1,24 +1,25 @@
 # sketricgen-sdk — Agent Instructions
 
-This is the **public Python SDK** for SketricGen, published to **PyPI** as `sketricgen`. It ships two clients: `SketricGenClient` wraps the **data plane** (run workflows, upload files, stream responses), and `AdminClient` wraps the **control plane** (manage resources via the Teamspace v2 Admin API). See `CONTEXT.md` for the data-plane vs control-plane vocabulary.
+This is the **public Python SDK** for SketricGen, published to **PyPI** as `sketricgen`. Its single `SketricGenClient` routes runtime operations to the data plane and resource-management operations to the control plane. See `CONTEXT.md` for plane and credential vocabulary.
 
 ---
 
 ## What this package does
 
-**Data plane (`SketricGenClient`):**
+**Runtime:**
 
 - **Run workflows** — async and sync methods to send messages to agent workflows
 - **Stream responses** — async/sync iterators yielding SSE events
 - **Upload files** — 3-step S3 presigned upload (init -> upload to S3 -> complete)
+- **Handle HITL** — opt runs in, expose pause metadata, and resume with typed decisions
 
-**Control plane (`AdminClient`):**
+**Control plane:**
 
 - **Manage resources** — teamspace identity (`whoami`), projects, agents, knowledge bases, brand agents, and connectors over the curated 15-operation Admin API surface
 - **Auto-paginating lists** — `projects.list()` / `agents.list()` / `knowledge_bases.list()` follow the cursor lazily
 - **Async brand-agent provisioning** — `brand_agents.create_and_wait()` polls a job to completion; `create()` / `get_status()` expose the primitives
 
-**Both:**
+**All operations:**
 
 - **Async + sync** — every public method has a `_sync` twin
 - **Type safety** — full type hints, Pydantic models, `py.typed` marker
@@ -39,15 +40,15 @@ This is the **public Python SDK** for SketricGen, published to **PyPI** as `sket
 
 ```
 sketricgen/
-├── __init__.py       # Public exports (both clients, Config, exceptions, response types)
-├── client.py         # SketricGenClient — data plane (run_workflow, run_workflow_sync, file upload)
+├── __init__.py       # Public exports (client, config, exceptions, models)
+├── client.py         # Unified SketricGenClient
 ├── config.py         # SketricGenConfig dataclass (URLs, timeouts, from_env())
 ├── exceptions.py     # Custom exceptions (SketricGenError base; APIError, AdminError, JobError, etc.)
 ├── streaming.py      # SSE stream parsers (async + sync)
 ├── upload.py         # 3-step upload flow (detect content type, S3 presigned POST, complete)
-├── admin/            # Control plane — AdminClient
-│   ├── __init__.py   # Exports AdminClient
-│   ├── client.py     # AdminClient + resource namespaces; DEFAULT_ADMIN_BASE_URL; request core
+├── admin/            # Private control-plane transport and public response models
+│   ├── __init__.py   # Exports response models
+│   ├── client.py     # Private transport + resource namespaces
 │   └── models.py     # Admin API response models (extra="ignore")
 ├── models/
 │   ├── __init__.py
@@ -57,7 +58,7 @@ sketricgen/
 
 tests/
 ├── __init__.py
-├── admin/            # AdminClient tests, one module per namespace + foundation/lists
+├── admin/            # Control-plane tests, one module per namespace + foundation/lists
 └── fixtures/
     └── __init__.py
 
@@ -74,10 +75,9 @@ docs/examples/
 from sketricgen import SketricGenClient
 
 # Construct
-client = SketricGenClient(api_key="your-key")
+client = SketricGenClient(api_key="sk_api_...")
 # Or from environment
-config = SketricGenConfig.from_env()
-client = SketricGenClient(api_key=config.api_key)
+client = SketricGenClient.from_env()  # SKETRICGEN_API_KEY
 
 # Async non-streaming
 response = await client.run_workflow(agent_id="agent-id", user_input="Hello")
@@ -99,37 +99,22 @@ response = await client.run_workflow(
 )
 ```
 
-### Control-plane surface (`AdminClient`)
+### Control-plane surface
 
 ```python
-from sketricgen import AdminClient
-
-# Reads SKETRICGEN_ADMIN_API_KEY; base URL is baked in (optional base_url= override)
-admin = AdminClient()
-
 # whoami + auto-paginating lists (async; each has a _sync twin)
-me = await admin.whoami()
-async for project in admin.projects.list(): ...
-async for agent in admin.agents.list(): ...
-async for kb in admin.knowledge_bases.list(): ...
+me = await client.whoami()
+async for project in client.projects.list(): ...
+async for agent in client.agents.list(): ...
+async for kb in client.knowledge_bases.list(): ...
 
 # brand agents
-templates = await admin.brand_agents.list_templates()
-job = await admin.brand_agents.create_and_wait(name="Acme", seed_url="https://acme.example.com")
-job = await admin.brand_agents.create(name="Acme", seed_url="https://acme.example.com")
-status = await admin.brand_agents.get_status(job.job_id)
-detail = await admin.brand_agents.get(agent_id)
-await admin.brand_agents.update(agent_id, display_name="Acme")
-await admin.brand_agents.get_widget_config(agent_id)
-await admin.brand_agents.update_widget_config(agent_id, primary_color="#0055FF")
+templates = await client.brand_agents.list_templates()
+job = await client.brand_agents.create_and_wait(name="Acme", seed_url="https://acme.example.com")
 
 # connectors (attach/detach are connector-centric; route lives under /agents)
-await admin.connectors.list()
-await admin.connectors.list_tools("gmail")
-await admin.connectors.create_link("gmail", project_id="proj-123")
-await admin.connectors.check_connection("gmail", project_id="proj-123")
-await admin.connectors.attach(agent_id, "gmail", allowed_tools=["send_email"])
-await admin.connectors.detach(agent_id, "gmail")
+await client.connectors.list()
+await client.connectors.attach(agent_id, "gmail", allowed_tools=["send_email"])
 ```
 
 The 15-operation surface deliberately mirrors the in-repo MCP server, not the
@@ -142,8 +127,7 @@ for it, so changing the control-plane host means editing that constant.
 
 | Class | Purpose |
 |---|---|
-| `SketricGenClient` | Data-plane client — run workflows, upload files (async + sync) |
-| `AdminClient` | Control-plane client — manage resources with an admin key (async + sync) |
+| `SketricGenClient` | Unified runtime and control-plane client (async + sync) |
 | `SketricGenConfig` | Configuration (API key, URLs, timeouts, `from_env()`) |
 | `ChatResponse` | Non-streaming response (`agent_id`, `conversation_id`, `response`) |
 | `StreamEvent` | SSE event (`event_type`, `data`) |
@@ -164,14 +148,15 @@ All inherit from `SketricGenError`:
 
 ### Allowed upload types
 
-`image/jpeg`, `image/webp`, `image/png`, `application/pdf`, `image/gif` — max 20MB.
+The allowlist mirrors the public-assets backend: images, PDF, tabular,
+text/markup, structured data, and common source formats — max 20MB per file.
 
 ---
 
 ## Relationship to other services
 
 - Calls `sketricgen-chatservers` at `/api/v1/run-workflow` (base URL: `https://chat-v2.sketricgen.ai`)
-- `AdminClient` calls the Teamspace v2 Admin API at `/admin/v1/*` (control plane) — a separate host baked into `DEFAULT_ADMIN_BASE_URL`, with `Authorization: Bearer` auth
+- `SketricGenClient` calls the Teamspace v2 Admin API at `/admin/v1/*` with Bearer auth
 - Upload endpoints go to API Gateway Lambda (separate from chatservers)
 - Must stay in sync with the Node.js SDK (`sketricgen-node-sdk`) — same API surface, same event types
 - Changes to chatservers' public API require updates here

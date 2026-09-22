@@ -1,7 +1,7 @@
 """
 SketricGen SDK
 
-Python SDK for interacting with the SketricGen Chat Server API.
+Python SDK for interacting with the SketricGen runtime and Admin APIs.
 
 Example:
     ```python
@@ -27,7 +27,6 @@ Example:
     ```
 """
 
-from sketricgen.admin import AdminClient
 from sketricgen.client import SketricGenClient
 from sketricgen.config import SketricGenConfig
 from sketricgen.exceptions import (
@@ -43,17 +42,20 @@ from sketricgen.exceptions import (
     SketricGenUploadError,
     SketricGenValidationError,
 )
+from sketricgen.models.requests import HitlDecision, HitlResume
 from sketricgen.models.responses import (
     ChatResponse,
+    HitlActionRequest,
+    HitlRequest,
+    HitlReviewConfig,
     StreamEvent,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Clients
     "SketricGenClient",
-    "AdminClient",
     # Config
     "SketricGenConfig",
     # Exceptions
@@ -70,5 +72,10 @@ __all__ = [
     "SketricGenContentTypeError",
     # Response Models
     "ChatResponse",
+    "HitlDecision",
+    "HitlResume",
+    "HitlActionRequest",
+    "HitlRequest",
+    "HitlReviewConfig",
     "StreamEvent",
 ]

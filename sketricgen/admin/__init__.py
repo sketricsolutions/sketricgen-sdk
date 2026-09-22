@@ -1,13 +1,9 @@
 """
-SketricGen control-plane (Admin API) surface.
-
-Exposes the ``AdminClient`` and the typed response models for the curated
-15-operation Admin API surface.
+Typed models for the SketricGen control-plane surface.
 """
 
 from sketricgen.admin.client import (
     DEFAULT_ADMIN_BASE_URL,
-    AdminClient,
 )
 from sketricgen.admin.models import (
     Agent,
@@ -33,7 +29,6 @@ from sketricgen.admin.models import (
 )
 
 __all__ = [
-    "AdminClient",
     "DEFAULT_ADMIN_BASE_URL",
     "Agent",
     "BrandAgentDetail",

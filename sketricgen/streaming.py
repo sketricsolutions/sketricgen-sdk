@@ -4,7 +4,8 @@ SketricGen SDK Streaming Utilities
 Handles Server-Sent Events (SSE) parsing for streaming responses.
 """
 
-from typing import AsyncIterator, Iterator, Optional
+from collections.abc import AsyncIterator, Iterator
+from typing import Optional
 
 import httpx
 

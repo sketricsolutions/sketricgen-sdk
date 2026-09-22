@@ -5,9 +5,9 @@ import pytest
 import respx
 
 from sketricgen import (
-    AdminClient,
     SketricGenAdminError,
     SketricGenAuthenticationError,
+    SketricGenClient,
 )
 from sketricgen.admin.client import DEFAULT_ADMIN_BASE_URL
 
@@ -15,29 +15,27 @@ from .conftest import BASE_URL
 
 
 def test_missing_key_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SKETRICGEN_ADMIN_API_KEY", raising=False)
-    with pytest.raises(ValueError, match="SKETRICGEN_ADMIN_API_KEY"):
-        AdminClient()
+    monkeypatch.delenv("SKETRICGEN_API_KEY", raising=False)
+    monkeypatch.setenv("SKETRICGEN_RUNTIME_API_KEY", "legacy-runtime")
+    monkeypatch.setenv("SKETRICGEN_ADMIN_API_KEY", "legacy-admin")
+    with pytest.raises(ValueError, match="SKETRICGEN_API_KEY"):
+        SketricGenClient.from_env()
 
 
 def test_key_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SKETRICGEN_ADMIN_API_KEY", "sk_admin_env")
-    client = AdminClient()
-    assert client._api_key == "sk_admin_env"
+    monkeypatch.setenv("SKETRICGEN_API_KEY", "sk_api_env")
+    client = SketricGenClient.from_env()
+    assert client._config.api_key == "sk_api_env"
+    assert client._admin._api_key == "sk_api_env"
 
 
 def test_default_base_url() -> None:
-    client = AdminClient(api_key="sk_admin_x")
-    assert client._base_url == DEFAULT_ADMIN_BASE_URL
-
-
-def test_base_url_override_is_trimmed() -> None:
-    client = AdminClient(api_key="sk_admin_x", base_url="https://sandbox.test/v1/")
-    assert client._base_url == "https://sandbox.test/v1"
+    client = SketricGenClient(api_key="sk_api_x")
+    assert client._admin._base_url == DEFAULT_ADMIN_BASE_URL
 
 
 @respx.mock
-async def test_whoami_request_and_response(admin: AdminClient) -> None:
+async def test_whoami_request_and_response(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/teamspaces").mock(
         return_value=httpx.Response(
             200,
@@ -60,13 +58,13 @@ async def test_whoami_request_and_response(admin: AdminClient) -> None:
     request = route.calls.last.request
     assert request.method == "GET"
     assert request.url.path == "/admin/v1/teamspaces"
-    assert request.headers["Authorization"] == "Bearer sk_admin_test"
+    assert request.headers["Authorization"] == "Bearer sk_api_test"
     assert me.teamspace_id == "ts_1"
     assert me.display_name == "Acme"
 
 
 @respx.mock
-def test_whoami_sync(admin: AdminClient) -> None:
+def test_whoami_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/teamspaces").mock(
         return_value=httpx.Response(
             200, json={"teamspaces": [{"teamspace_id": "ts_9"}]}
@@ -78,7 +76,7 @@ def test_whoami_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_admin_error_maps_status_and_code(admin: AdminClient) -> None:
+async def test_admin_error_maps_status_and_code(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/teamspaces").mock(
         return_value=httpx.Response(
             403, json={"error": "wrong project", "code": "project_scope_mismatch"}
@@ -95,7 +93,7 @@ async def test_admin_error_maps_status_and_code(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_401_maps_to_authentication_error(admin: AdminClient) -> None:
+async def test_401_maps_to_authentication_error(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/teamspaces").mock(
         return_value=httpx.Response(
             401, json={"error": "bad key", "code": "invalid_key"}
@@ -109,7 +107,7 @@ async def test_401_maps_to_authentication_error(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_admin_error_sync_path(admin: AdminClient) -> None:
+def test_admin_error_sync_path(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/teamspaces").mock(
         return_value=httpx.Response(
             404, json={"error": "nope", "code": "teamspace_not_found"}

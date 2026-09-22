@@ -10,30 +10,21 @@ Glossary for the `sketricgen` Python SDK. Terms only; no implementation details.
 - **Control plane** — the surface that *manages* resources (projects, agents,
   brand agents, knowledge bases, connectors, members, usage) via the Teamspace
   v2 Admin API at `/admin/v1/*`. A distinct API with its own host, auth scheme,
-  and role model. The new admin client talks to this.
+  and role model. The unified client routes management operations to this plane.
 
 ## Credentials
 
-- **Runtime key** — a data-plane API key (prefix `sk_runtime_…`) that authorizes
-  running workflows. Carries no role. Read by the SDK from
-  `SKETRICGEN_RUNTIME_API_KEY`. Sent to the chat server as an `API-KEY` header.
-- **Admin key** — a control-plane API key (prefix `sk_admin_…`) that authorizes
-  managing resources. Carries a **role** (`viewer` / `editor` / `admin`) and a
-  **scope** (a single project, or the whole teamspace). Read by the SDK from
-  `SKETRICGEN_ADMIN_API_KEY`. Sent to the control plane as an
-  `Authorization: Bearer` header. An admin key **cannot** run workflows and a
-  runtime key **cannot** reach the control plane — they are not
-  interchangeable.
+- **API key** — a `sk_api_…` credential with `runtime`, `admin`, or both access
+  flags. Read by the SDK from `SKETRICGEN_API_KEY`. Runtime calls send it in the
+  `API-KEY` header; control-plane calls send it as `Authorization: Bearer`. A
+  call fails when the key lacks the access required by that plane.
 
 ## SDK clients
 
-- **`SketricGenClient`** — the data-plane client. Runs workflows and uploads
-  assets with a runtime key.
-- **`AdminClient`** — the control-plane client. Manages resources with an admin
-  key. Its base URL is a value the SDK ships, not something the SDK's user
-  configures; the user supplies only their admin key.
+- **`SketricGenClient`** — the single public client. It runs workflows, uploads
+  assets, and manages control-plane resources with one API key.
 
-## Scope kinds (admin key)
+## Admin scope kinds
 
 - **Project-scoped** — bound to one project; every operation targets it.
 - **Teamspace-scoped** — spans all projects in the teamspace; unlocks project

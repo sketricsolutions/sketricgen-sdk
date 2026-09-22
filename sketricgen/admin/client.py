@@ -1,15 +1,10 @@
 """
 SketricGen control-plane (Admin API) client.
 
-``AdminClient`` wraps the curated automation surface of the Teamspace v2 Admin
-API (`/admin/v1/*`) with typed, resource-grouped methods. It authenticates with
-an admin key (`Authorization: Bearer sk_admin_…`) and is a distinct client from
-the data-plane ``SketricGenClient`` — the two credentials are not
-interchangeable.
+Private control-plane transport used by the unified ``SketricGenClient``.
 """
 
 import asyncio
-import os
 import time
 from collections.abc import AsyncIterator, Iterator
 from typing import Any, Optional, TypeVar
@@ -80,47 +75,26 @@ def _prune_none(body: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in body.items() if v is not None}
 
 
-class AdminClient:
-    """
-    Control-plane client for the SketricGen Admin API.
-
-    Example:
-        ```python
-        from sketricgen import AdminClient
-
-        admin = AdminClient()  # reads SKETRICGEN_ADMIN_API_KEY
-
-        me = await admin.whoami()
-        async for project in admin.projects.list():
-            print(project.display_name)
-        ```
-    """
+class _AdminTransport:
+    """Control-plane transport for the unified public client."""
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str,
         base_url: Optional[str] = None,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> None:
         """
-        Initialize the Admin client.
+        Initialize the private Admin API transport.
 
         Args:
-            api_key: Admin API key. Falls back to ``SKETRICGEN_ADMIN_API_KEY``.
+            api_key: Unified SketricGen API key.
             base_url: Optional control-plane base URL override (for testing or
                 self-hosting). Defaults to the SDK's baked-in host.
             timeout: Per-request timeout in seconds.
 
-        Raises:
-            ValueError: If no admin key is provided or found in the environment.
         """
-        resolved_key = api_key or os.getenv("SKETRICGEN_ADMIN_API_KEY")
-        if not resolved_key:
-            raise ValueError(
-                "Admin API key is required. Set the SKETRICGEN_ADMIN_API_KEY "
-                "environment variable or pass api_key=... to AdminClient."
-            )
-        self._api_key = resolved_key
+        self._api_key = api_key
         self._base_url = (base_url or DEFAULT_ADMIN_BASE_URL).rstrip("/")
         self._timeout = timeout
 
@@ -286,7 +260,7 @@ class AdminClient:
 
 
 class ProjectsNamespace:
-    def __init__(self, client: AdminClient) -> None:
+    def __init__(self, client: _AdminTransport) -> None:
         self._client = client
 
     def list(self) -> AsyncIterator[Project]:
@@ -299,7 +273,7 @@ class ProjectsNamespace:
 
 
 class AgentsNamespace:
-    def __init__(self, client: AdminClient) -> None:
+    def __init__(self, client: _AdminTransport) -> None:
         self._client = client
 
     def list(self) -> AsyncIterator[Agent]:
@@ -312,7 +286,7 @@ class AgentsNamespace:
 
 
 class KnowledgeBasesNamespace:
-    def __init__(self, client: AdminClient) -> None:
+    def __init__(self, client: _AdminTransport) -> None:
         self._client = client
 
     def list(self) -> AsyncIterator[KnowledgeBase]:
@@ -329,7 +303,7 @@ class KnowledgeBasesNamespace:
 
 
 class BrandAgentsNamespace:
-    def __init__(self, client: AdminClient) -> None:
+    def __init__(self, client: _AdminTransport) -> None:
         self._client = client
 
     # -- templates -----------------------------------------------------
@@ -640,7 +614,7 @@ class BrandAgentsNamespace:
 
 
 class ConnectorsNamespace:
-    def __init__(self, client: AdminClient) -> None:
+    def __init__(self, client: _AdminTransport) -> None:
         self._client = client
 
     async def list(self) -> ConnectorList:

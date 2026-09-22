@@ -1,14 +1,17 @@
 """
 SketricGen SDK Client
 
-Main client class for interacting with the SketricGen Chat Server API.
+Unified client for interacting with the SketricGen runtime and Admin APIs.
 """
 
 import asyncio
-from typing import AsyncIterator, BinaryIO, Iterator, Optional, Union
+from collections.abc import AsyncIterator, Iterator
+from typing import BinaryIO, Optional, Union
 
 import httpx
 
+from sketricgen.admin.client import _AdminTransport
+from sketricgen.admin.models import Teamspace
 from sketricgen.config import SketricGenConfig
 from sketricgen.exceptions import (
     SketricGenAPIError,
@@ -19,6 +22,7 @@ from sketricgen.exceptions import (
 )
 from sketricgen.models.requests import (
     CompleteUploadRequest,
+    HitlResume,
     InitiateUploadRequest,
     RunWorkflowRequest,
 )
@@ -29,17 +33,12 @@ from sketricgen.models.responses import (
     StreamEvent,
 )
 from sketricgen.streaming import parse_sse_stream, parse_sse_stream_sync
-from sketricgen.upload import (
-    detect_content_type,
-    get_file_info,
-    upload_file_to_s3,
-    upload_file_to_s3_sync,
-)
+from sketricgen.upload import upload_file_to_s3, upload_file_to_s3_sync
 
 
 class SketricGenClient:
     """
-    Main client for interacting with SketricGen Chat Server API.
+    Unified client for the SketricGen runtime and Admin APIs.
 
     Example:
         ```python
@@ -83,14 +82,20 @@ class SketricGenClient:
             upload_timeout=upload_timeout,
             max_retries=max_retries,
         )
+        self._admin = _AdminTransport(api_key=api_key, timeout=timeout)
+        self.projects = self._admin.projects
+        self.agents = self._admin.agents
+        self.knowledge_bases = self._admin.knowledge_bases
+        self.brand_agents = self._admin.brand_agents
+        self.connectors = self._admin.connectors
 
     @classmethod
-    def from_env(cls, **kwargs) -> "SketricGenClient":
+    def from_env(cls, **kwargs: int) -> "SketricGenClient":
         """
         Create a client from environment variables.
 
         Environment Variables:
-            SKETRICGEN_RUNTIME_API_KEY: API key (required)
+            SKETRICGEN_API_KEY: API key (required)
             SKETRICGEN_TIMEOUT: Request timeout (optional)
             SKETRICGEN_UPLOAD_TIMEOUT: Upload timeout (optional)
             SKETRICGEN_MAX_RETRIES: Max retries (optional)
@@ -108,6 +113,14 @@ class SketricGenClient:
             upload_timeout=kwargs.get("upload_timeout", config.upload_timeout),
             max_retries=kwargs.get("max_retries", config.max_retries),
         )
+
+    async def whoami(self) -> Teamspace:
+        """Return the teamspace visible to this key."""
+        return await self._admin.whoami()
+
+    def whoami_sync(self) -> Teamspace:
+        """Synchronous version of :meth:`whoami`."""
+        return self._admin.whoami_sync()
 
     def _get_headers(self) -> dict[str, str]:
         """Get default request headers."""
@@ -157,11 +170,13 @@ class SketricGenClient:
     async def run_workflow(
         self,
         agent_id: str,
-        user_input: str,
+        user_input: str = "",
         conversation_id: Optional[str] = None,
         contact_id: Optional[str] = None,
         file_paths: Optional[list[str]] = None,
         stream: bool = False,
+        enable_hitl: bool = False,
+        hitl_resume: Optional[HitlResume] = None,
     ) -> Union[ChatResponse, AsyncIterator[StreamEvent]]:
         """
         Execute a workflow/chat request.
@@ -173,6 +188,8 @@ class SketricGenClient:
             contact_id: Optional external contact ID
             file_paths: Optional list of file paths to upload and attach
             stream: Whether to stream the response
+            enable_hitl: Enable human-in-the-loop tools for this turn
+            hitl_resume: Decisions for a pending HITL request
 
         Returns:
             ChatResponse if stream=False, AsyncIterator[StreamEvent] if stream=True
@@ -227,6 +244,8 @@ class SketricGenClient:
                 contact_id=contact_id,
                 assets=asset_ids,
                 stream=stream,
+                enable_hitl=enable_hitl,
+                hitl_resume=hitl_resume,
             )
         except ValueError as e:
             raise SketricGenValidationError(str(e)) from e
@@ -287,11 +306,13 @@ class SketricGenClient:
     def run_workflow_sync(
         self,
         agent_id: str,
-        user_input: str,
+        user_input: str = "",
         conversation_id: Optional[str] = None,
         contact_id: Optional[str] = None,
         file_paths: Optional[list[str]] = None,
         stream: bool = False,
+        enable_hitl: bool = False,
+        hitl_resume: Optional[HitlResume] = None,
     ) -> Union[ChatResponse, Iterator[StreamEvent]]:
         """
         Synchronous version of run_workflow.
@@ -303,6 +324,8 @@ class SketricGenClient:
             contact_id: Optional external contact ID
             file_paths: Optional list of file paths to upload and attach
             stream: Whether to stream the response
+            enable_hitl: Enable human-in-the-loop tools for this turn
+            hitl_resume: Decisions for a pending HITL request
 
         Returns:
             ChatResponse if stream=False, Iterator[StreamEvent] if stream=True
@@ -320,7 +343,9 @@ class SketricGenClient:
             from concurrent.futures import ThreadPoolExecutor
 
             def upload_file(file_path: str) -> str:
-                response = self._upload_asset_sync(agent_id=agent_id, file_path=file_path)
+                response = self._upload_asset_sync(
+                    agent_id=agent_id, file_path=file_path
+                )
                 return response.file_id
 
             with ThreadPoolExecutor(max_workers=min(len(file_paths), 5)) as executor:
@@ -334,6 +359,8 @@ class SketricGenClient:
                 contact_id=contact_id,
                 assets=asset_ids,
                 stream=stream,
+                enable_hitl=enable_hitl,
+                hitl_resume=hitl_resume,
             )
         except ValueError as e:
             raise SketricGenValidationError(str(e)) from e
@@ -343,7 +370,9 @@ class SketricGenClient:
         else:
             return self._run_workflow_non_stream_sync(request)
 
-    def _run_workflow_non_stream_sync(self, request: RunWorkflowRequest) -> ChatResponse:
+    def _run_workflow_non_stream_sync(
+        self, request: RunWorkflowRequest
+    ) -> ChatResponse:
         """Execute non-streaming workflow request synchronously."""
         try:
             with httpx.Client() as client:
@@ -533,6 +562,7 @@ class SketricGenClient:
         # Determine file name if not provided
         if isinstance(file_path, str):
             from pathlib import Path
+
             resolved_file_name = file_name or Path(file_path).name
         elif file_name:
             resolved_file_name = file_name
@@ -661,6 +691,7 @@ class SketricGenClient:
         # Determine file name if not provided
         if isinstance(file_path, str):
             from pathlib import Path
+
             resolved_file_name = file_name or Path(file_path).name
         elif file_name:
             resolved_file_name = file_name

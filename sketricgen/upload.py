@@ -7,11 +7,15 @@ Handles file uploads to S3 using presigned POST URLs.
 import mimetypes
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO, Optional, Union
+from typing import Any, BinaryIO, Optional, Union
 
 import httpx
 
-from sketricgen.config import ALLOWED_CONTENT_TYPES, MAX_FILE_SIZE_BYTES
+from sketricgen.config import (
+    ALLOWED_CONTENT_TYPES,
+    EXTENSION_TO_CONTENT_TYPE,
+    MAX_FILE_SIZE_BYTES,
+)
 from sketricgen.exceptions import (
     SketricGenContentTypeError,
     SketricGenFileSizeError,
@@ -31,6 +35,9 @@ def detect_content_type(file_name: str) -> Optional[str]:
     Returns:
         MIME type string or None if undetectable
     """
+    extension = Path(file_name).suffix.lower()
+    if extension in EXTENSION_TO_CONTENT_TYPE:
+        return EXTENSION_TO_CONTENT_TYPE[extension]
     content_type, _ = mimetypes.guess_type(file_name)
     return content_type
 
@@ -118,12 +125,12 @@ def get_file_info(
 
         if not file_name:
             # Try to get name from file object
-            resolved_file_name = getattr(file_obj, "name", None)
-            if not resolved_file_name:
+            file_object_name = getattr(file_obj, "name", None)
+            if not isinstance(file_object_name, str) or not file_object_name:
                 raise SketricGenValidationError(
                     "file_name is required when uploading from file-like object"
                 )
-            resolved_file_name = Path(resolved_file_name).name
+            resolved_file_name = Path(file_object_name).name
         else:
             resolved_file_name = file_name
 
@@ -187,12 +194,12 @@ async def upload_file_to_s3(
 
         # Build multipart form data manually to ensure correct field order
         # S3 requires: all policy fields first, then file last
-        form_files = {}
-        
+        form_files: dict[str, Any] = {}
+
         # Add all presigned fields first (in order)
         for key, value in upload_fields.items():
             form_files[key] = (None, value)
-        
+
         # Add file last (required by S3)
         form_files["file"] = (resolved_file_name, file_obj, policy_content_type)
 
@@ -252,12 +259,12 @@ def upload_file_to_s3_sync(
 
         # Build multipart form data manually to ensure correct field order
         # S3 requires: all policy fields first, then file last
-        form_files = {}
-        
+        form_files: dict[str, Any] = {}
+
         # Add all presigned fields first (in order)
         for key, value in upload_fields.items():
             form_files[key] = (None, value)
-        
+
         # Add file last (required by S3)
         form_files["file"] = (resolved_file_name, file_obj, policy_content_type)
 
