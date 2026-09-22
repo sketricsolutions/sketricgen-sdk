@@ -6,27 +6,78 @@ probes are opt-in (``SKETRICGEN_LIVE_WRITE``) and clean up after themselves.
 
 Run with real keys and a configured AWS CLI:
 
-    export SKETRICGEN_ADMIN_API_KEY=sk_admin_...
-    export SKETRICGEN_RUNTIME_API_KEY=sk_runtime_...
+    export SKETRICGEN_API_KEY=sk_api_...
     pytest -m live tests/live -s          # -s shows the SDK-vs-DynamoDB report
 """
 
+import json
 import os
+import struct
+import zlib
 
 import pytest
 
 from sketricgen import (
-    AdminClient,
     ChatResponse,
+    HitlDecision,
+    HitlResume,
     SketricGenAdminError,
     SketricGenAuthenticationError,
+    SketricGenClient,
 )
 
 from .dynamo import DynamoProbe
-from .fixtures import TEAMSPACE_ID, TEST_AGENT_ID
+from .fixtures import TEAMSPACE_ID, TEST_AGENT_ID, TEST_BRAND_AGENT_ID
 from .reporter import ProbeReporter
 
 pytestmark = pytest.mark.live
+
+
+def _minimal_png() -> bytes:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    width = height = 16
+    rows = b"".join(b"\x00" + b"\xff\xff\xff" * width for _ in range(height))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _minimal_pdf() -> bytes:
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+            b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+        ),
+        b"<< /Length 42 >>\nstream\nBT /F1 12 Tf 20 100 Td (SDK probe) Tj ET\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    content = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, body in enumerate(objects, 1):
+        offsets.append(len(content))
+        content.extend(f"{index} 0 obj\n".encode() + body + b"\nendobj\n")
+    xref = len(content)
+    content.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+    content.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        content.extend(f"{offset:010d} 00000 n \n".encode())
+    content.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n".encode()
+    )
+    return bytes(content)
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +86,7 @@ pytestmark = pytest.mark.live
 
 
 async def test_whoami_matches_dynamo(
-    admin: AdminClient, dynamo: DynamoProbe, reporter: ProbeReporter
+    admin: SketricGenClient, dynamo: DynamoProbe, reporter: ProbeReporter
 ) -> None:
     me = await admin.whoami()
     row = dynamo.teamspace()
@@ -56,7 +107,7 @@ async def test_whoami_matches_dynamo(
 
 
 async def test_projects_match_dynamo(
-    admin: AdminClient, dynamo: DynamoProbe, reporter: ProbeReporter
+    admin: SketricGenClient, dynamo: DynamoProbe, reporter: ProbeReporter
 ) -> None:
     sdk_ids = {p.project_id async for p in admin.projects.list()}
     ddb_ids = set(dynamo.project_ids())
@@ -72,7 +123,7 @@ async def test_projects_match_dynamo(
 
 
 async def test_agents_include_test_agent_and_fields_match(
-    admin: AdminClient, dynamo: DynamoProbe, reporter: ProbeReporter
+    admin: SketricGenClient, dynamo: DynamoProbe, reporter: ProbeReporter
 ) -> None:
     sdk_agents = {a.agent_id: a async for a in admin.agents.list()}
     assert TEST_AGENT_ID in sdk_agents, "test agent absent from admin.agents.list()"
@@ -102,7 +153,7 @@ async def test_agents_include_test_agent_and_fields_match(
 
 
 async def test_knowledge_bases_match_dynamo(
-    admin: AdminClient, dynamo: DynamoProbe, reporter: ProbeReporter
+    admin: SketricGenClient, dynamo: DynamoProbe, reporter: ProbeReporter
 ) -> None:
     sdk_ids = {kb.knowledge_base_id async for kb in admin.knowledge_bases.list()}
     ddb_ids = set(dynamo.knowledge_base_ids())
@@ -118,7 +169,7 @@ async def test_knowledge_bases_match_dynamo(
 
 
 async def test_catalogs_return_without_error(
-    admin: AdminClient, reporter: ProbeReporter
+    admin: SketricGenClient, reporter: ProbeReporter
 ) -> None:
     # Catalogs are server-curated, not teamspace rows — no DynamoDB cross-check.
     templates = await admin.brand_agents.list_templates()
@@ -146,7 +197,7 @@ async def test_catalogs_return_without_error(
 
 
 async def test_bad_id_raises_admin_error_with_code(
-    admin: AdminClient, reporter: ProbeReporter
+    admin: SketricGenClient, reporter: ProbeReporter
 ) -> None:
     unknown = "skflow_00000000-0000-0000-0000-000000000000"
     with pytest.raises(SketricGenAdminError) as excinfo:
@@ -166,11 +217,11 @@ async def test_bad_id_raises_admin_error_with_code(
 
 
 async def test_bad_key_raises_authentication_error(
-    admin_key: str, reporter: ProbeReporter
+    api_key: str, admin: SketricGenClient, reporter: ProbeReporter
 ) -> None:
-    # Gated on a configured run (admin_key) so a keyless `pytest -m live` skips
-    # uniformly; the probe itself uses a deliberately invalid key, not admin_key.
-    bad = AdminClient(api_key="sk_admin_invalid_probe_key")
+    # Gated on a configured run so a keyless `pytest -m live` skips uniformly.
+    bad = SketricGenClient(api_key="sk_api_invalid_probe_key")
+    bad._admin._base_url = admin._admin._base_url
     with pytest.raises(SketricGenAuthenticationError) as excinfo:
         await bad.whoami()
 
@@ -212,6 +263,94 @@ async def test_run_workflow_against_dev(
     )
 
 
+async def test_multiple_file_types_against_dev(
+    runtime_client,
+    tmp_path,
+    reporter: ProbeReporter,
+) -> None:
+    files = {
+        "pixel.png": _minimal_png(),
+        "sample.pdf": _minimal_pdf(),
+        "notes.txt": b"SketricGen SDK live upload probe.\n",
+        "payload.json": b'{"probe": "sketricgen-sdk", "ok": true}\n',
+        "sheet.csv": b"name,value\nprobe,1\n",
+    }
+    paths = []
+    for name, contents in files.items():
+        path = tmp_path / name
+        path.write_bytes(contents)
+        paths.append(str(path))
+
+    response = await runtime_client.run_workflow(
+        agent_id=TEST_AGENT_ID,
+        user_input="Confirm that you received the attached test files.",
+        file_paths=paths,
+    )
+    assert isinstance(response, ChatResponse)
+    assert not response.error, f"attachment run returned an error: {response.error}"
+    assert response.response
+    reporter.record(
+        "run_workflow (5 attachment types)",
+        sdk="png,pdf,txt,json,csv",
+        observed=f"conv={response.conversation_id}",
+        match=True,
+    )
+
+
+async def test_hitl_pause_and_resume_against_dev(
+    runtime_client,
+    reporter: ProbeReporter,
+) -> None:
+    paused = await runtime_client.run_workflow(
+        agent_id=TEST_BRAND_AGENT_ID,
+        user_input=(
+            "Call the lead_capture_form tool now so I can enter my details. "
+            "Do not answer with plain text instead."
+        ),
+        enable_hitl=True,
+    )
+    assert isinstance(paused, ChatResponse)
+    assert paused.run_paused_hitl
+    assert paused.hitl_request is not None
+
+    skip = json.dumps(
+        {
+            "skipped": True,
+            "full_name": None,
+            "email": None,
+            "form_payload": {},
+            "consent_given": False,
+            "metadata": {"skip_reason": "sdk_live_probe"},
+        }
+    )
+    decisions = [
+        HitlDecision(
+            type="respond",
+            message=skip if action.name == "lead_capture_form" else "",
+        )
+        for action in paused.hitl_request.action_requests
+    ]
+    resumed = await runtime_client.run_workflow(
+        agent_id=TEST_BRAND_AGENT_ID,
+        user_input="Skip the form.",
+        conversation_id=paused.conversation_id,
+        enable_hitl=True,
+        hitl_resume=HitlResume(
+            request_id=paused.hitl_request.request_id,
+            decisions=decisions,
+        ),
+    )
+    assert isinstance(resumed, ChatResponse)
+    assert not resumed.error, f"HITL resume returned an error: {resumed.error}"
+    assert not resumed.run_paused_hitl
+    reporter.record(
+        "run_workflow (HITL pause/resume)",
+        sdk=f"request={paused.hitl_request.request_id}",
+        observed=f"conv={paused.conversation_id}",
+        match=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Write probe — opt-in only, with cleanup and DynamoDB verification
 # ---------------------------------------------------------------------------
@@ -228,7 +367,7 @@ async def test_run_workflow_against_dev(
 
 async def test_brand_agent_display_name_roundtrip(
     write_enabled: None,
-    admin: AdminClient,
+    admin: SketricGenClient,
     dynamo: DynamoProbe,
     reporter: ProbeReporter,
 ) -> None:

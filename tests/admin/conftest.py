@@ -6,16 +6,18 @@ from typing import Any
 import httpx
 import pytest
 
-from sketricgen import AdminClient
+from sketricgen import SketricGenClient
 
 BASE_URL = "https://admin.test/admin/v1"
-API_KEY = "sk_admin_test"
+API_KEY = "sk_api_test"
 
 
 @pytest.fixture
-def admin() -> AdminClient:
-    """An AdminClient pointed at the mocked control-plane host."""
-    return AdminClient(api_key=API_KEY, base_url=BASE_URL)
+def admin() -> SketricGenClient:
+    """A unified client pointed at the mocked control-plane host."""
+    client = SketricGenClient(api_key=API_KEY)
+    client._admin._base_url = BASE_URL
+    return client
 
 
 def request_body(request: httpx.Request) -> dict[str, Any]:

@@ -4,9 +4,52 @@ Sketric SDK Response Models
 Pydantic models for API response parsing.
 """
 
-from typing import Any, Optional
+import json
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class Asset(BaseModel):
+    """Generated asset returned by a workflow."""
+
+    file_id: str
+    url: Optional[str] = None
+    content_type: Optional[str] = None
+
+
+class HitlActionRequest(BaseModel):
+    """Tool action awaiting a human decision."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class HitlReviewConfig(BaseModel):
+    """Allowed decisions for one HITL action."""
+
+    model_config = ConfigDict(extra="allow")
+
+    allowed_decisions: list[Literal["respond", "approve", "reject"]]
+
+
+class HitlRequest(BaseModel):
+    """Durable metadata for a paused HITL run."""
+
+    model_config = ConfigDict(extra="allow")
+
+    schema_version: int = 1
+    request_id: str
+    thread_id: str
+    run_id: str
+    interrupt_ids: list[str] = Field(default_factory=list)
+    original_run_id: Optional[str] = None
+    action_requests: list[HitlActionRequest]
+    review_configs: list[HitlReviewConfig]
+    paused_at: Optional[str] = None
+    status: Literal["pending", "resuming", "resolved", "superseded"] = "pending"
 
 
 class ChatResponse(BaseModel):
@@ -18,6 +61,12 @@ class ChatResponse(BaseModel):
     response: str = Field(..., description="Assistant's response")
     owner: str = Field(..., description="Owner of the agent")
     error: bool = Field(default=False, description="Error flag")
+    assets: list[Asset] = Field(default_factory=list)
+    run_paused_hitl: bool = False
+    hitl_interrupts: Optional[list[dict[str, Any]]] = None
+    hitl_request: Optional[HitlRequest] = None
+    run_halted_out_of_credits: bool = False
+    web_search_citations: Optional[list[dict[str, str]]] = None
 
 
 class StreamEvent(BaseModel):
@@ -26,6 +75,17 @@ class StreamEvent(BaseModel):
     event_type: str = Field(..., description="Type of the event")
     data: str = Field(..., description="Event data/content")
     id: Optional[str] = Field(None, description="Event ID")
+
+    @property
+    def is_terminal(self) -> bool:
+        """Whether this event ends the current workflow stream."""
+        terminal_types = {"RUN_FINISHED", "RUN_ERROR", "RUN_PAUSED_HITL"}
+        if self.event_type in terminal_types:
+            return True
+        try:
+            return json.loads(self.data).get("type") in terminal_types
+        except (json.JSONDecodeError, AttributeError):
+            return False
 
 
 class PresignedUpload(BaseModel):

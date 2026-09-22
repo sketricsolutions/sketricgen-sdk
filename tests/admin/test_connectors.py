@@ -3,13 +3,13 @@
 import httpx
 import respx
 
-from sketricgen import AdminClient
+from sketricgen import SketricGenClient
 
 from .conftest import BASE_URL, request_body
 
 
 @respx.mock
-async def test_list_connectors(admin: AdminClient) -> None:
+async def test_list_connectors(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/connectors").mock(
         return_value=httpx.Response(
             200,
@@ -35,7 +35,7 @@ async def test_list_connectors(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_list_connectors_sync(admin: AdminClient) -> None:
+def test_list_connectors_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/connectors").mock(
         return_value=httpx.Response(200, json={"connectors": [{"app_slug": "slack"}]})
     )
@@ -44,7 +44,7 @@ def test_list_connectors_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_list_tools(admin: AdminClient) -> None:
+async def test_list_tools(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/connectors/gmail/tools").mock(
         return_value=httpx.Response(
             200,
@@ -70,7 +70,7 @@ async def test_list_tools(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_list_tools_sync(admin: AdminClient) -> None:
+def test_list_tools_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/connectors/discord/tools").mock(
         return_value=httpx.Response(
             200, json={"app_slug": "discord", "tools": [], "restriction": "curated"}
@@ -81,7 +81,7 @@ def test_list_tools_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_create_link(admin: AdminClient) -> None:
+async def test_create_link(admin: SketricGenClient) -> None:
     route = respx.post(f"{BASE_URL}/connectors/gmail/connect-link").mock(
         return_value=httpx.Response(
             200,
@@ -104,7 +104,7 @@ async def test_create_link(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_create_link_sync(admin: AdminClient) -> None:
+def test_create_link_sync(admin: SketricGenClient) -> None:
     respx.post(f"{BASE_URL}/connectors/gmail/connect-link").mock(
         return_value=httpx.Response(
             200,
@@ -116,7 +116,7 @@ def test_create_link_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_check_connection(admin: AdminClient) -> None:
+async def test_check_connection(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/connectors/gmail/connection").mock(
         return_value=httpx.Response(
             200, json={"app_slug": "gmail", "provider": "pipedream", "connected": True}
@@ -135,7 +135,7 @@ async def test_check_connection(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_attach(admin: AdminClient) -> None:
+async def test_attach(admin: SketricGenClient) -> None:
     route = respx.post(f"{BASE_URL}/agents/skbrand_1/connectors").mock(
         return_value=httpx.Response(
             200,
@@ -166,7 +166,7 @@ async def test_attach(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_attach_sync_omits_allowed_tools(admin: AdminClient) -> None:
+def test_attach_sync_omits_allowed_tools(admin: SketricGenClient) -> None:
     route = respx.post(f"{BASE_URL}/agents/a1/connectors").mock(
         return_value=httpx.Response(
             200, json={"agent_id": "a1", "app_slug": "web_search", "attached": True}
@@ -178,7 +178,7 @@ def test_attach_sync_omits_allowed_tools(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_detach(admin: AdminClient) -> None:
+async def test_detach(admin: SketricGenClient) -> None:
     route = respx.delete(f"{BASE_URL}/agents/skbrand_1/connectors/gmail").mock(
         return_value=httpx.Response(
             200, json={"agent_id": "skbrand_1", "app_slug": "gmail", "attached": False}
@@ -194,7 +194,7 @@ async def test_detach(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_detach_sync(admin: AdminClient) -> None:
+def test_detach_sync(admin: SketricGenClient) -> None:
     respx.delete(f"{BASE_URL}/agents/a1/connectors/slack").mock(
         return_value=httpx.Response(
             200, json={"agent_id": "a1", "app_slug": "slack", "attached": False}

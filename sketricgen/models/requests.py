@@ -5,16 +5,32 @@ Pydantic models for API request validation.
 """
 
 import os
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class HitlDecision(BaseModel):
+    """A decision for one pending HITL action."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: Literal["respond", "approve", "reject"]
+    message: Optional[str] = None
+
+
+class HitlResume(BaseModel):
+    """Resume a paused HITL request on the same conversation."""
+
+    request_id: str = Field(..., min_length=1)
+    decisions: list[HitlDecision] = Field(..., min_length=1)
 
 
 class RunWorkflowRequest(BaseModel):
     """Request model for run-workflow endpoint."""
 
     agent_id: str = Field(..., description="Agent ID to chat with")
-    user_input: str = Field(..., max_length=10000, description="User message")
+    user_input: str = Field("", max_length=10000, description="User message")
     assets: list[str] = Field(
         default_factory=list, description="List of asset file IDs"
     )
@@ -23,6 +39,8 @@ class RunWorkflowRequest(BaseModel):
     )
     contact_id: Optional[str] = Field(None, description="External contact ID")
     stream: bool = Field(False, description="Whether to stream the response")
+    enable_hitl: bool = Field(False, description="Enable HITL for this run")
+    hitl_resume: Optional[HitlResume] = Field(None, description="Pending HITL response")
 
     @field_validator("user_input")
     @classmethod
@@ -30,9 +48,21 @@ class RunWorkflowRequest(BaseModel):
         """Validate user input length."""
         if len(v) > 10000:
             raise ValueError("user_input cannot exceed 10000 characters")
-        if not v.strip():
-            raise ValueError("user_input cannot be empty")
         return v
+
+    @model_validator(mode="after")
+    def validate_run_input(self) -> "RunWorkflowRequest":
+        if self.hitl_resume is not None:
+            if not self.conversation_id:
+                raise ValueError("conversation_id is required when hitl_resume is set")
+            if not self.enable_hitl:
+                raise ValueError("enable_hitl must be true when hitl_resume is set")
+            return self
+        if not self.user_input.strip() and not self.assets:
+            raise ValueError(
+                "user_input is required unless hitl_resume or assets is set"
+            )
+        return self
 
     @field_validator("agent_id")
     @classmethod

@@ -5,6 +5,26 @@ All notable changes to this project are documented here. The format is based on
 adheres to [Semantic Versioning](https://semver.org/) (pre-1.0: breaking changes
 may ride minor bumps).
 
+## [0.3.0] — 2026-09-22
+
+### Added
+
+- HITL opt-in and resume support through `enable_hitl` and typed `HitlResume`,
+  `HitlDecision`, and pause-response models.
+- `RUN_PAUSED_HITL` terminal-event recognition for streaming callers.
+- Upload support for the backend's text, spreadsheet, structured-data, and
+  source-code MIME and extension allowlists.
+
+### Changed
+
+- **BREAKING:** `SketricGenClient` is now the only client. It exposes runtime
+  methods plus `whoami`, `projects`, `agents`, `knowledge_bases`,
+  `brand_agents`, and `connectors` for control-plane operations.
+- **BREAKING:** `AdminClient` was removed.
+- **BREAKING:** `SKETRICGEN_API_KEY` is the only supported API-key environment
+  variable. The same `sk_api_…` credential is routed with the header required
+  by each backend.
+
 ## [0.2.0] — 2026-09-01
 
 Adds control-plane support: a new `AdminClient` for the Teamspace v2 Admin API,
@@ -47,3 +67,4 @@ alongside the existing data-plane `SketricGenClient`.
   matching the already-production data-plane and upload defaults.
 
 [0.2.0]: https://github.com/sketricsolutions/sketricgen-sdk/releases/tag/v0.2.0
+[0.3.0]: https://github.com/sketricsolutions/sketricgen-sdk/releases/tag/v0.3.0

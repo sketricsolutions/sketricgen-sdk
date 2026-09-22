@@ -11,8 +11,9 @@ the `live` marker is deselected by default (see `pyproject.toml`), so a plain
   `knowledge_bases.list`, `brand_agents.list_templates`, `connectors.list`, each
   cross-checked against the dev DynamoDB rows. Plus the error contract: a bad id
   → `SketricGenAdminError` (with server `code`), a bad key → `401`.
-- **Data plane (read/run)** — `run_workflow` against `dev-chat` with the renamed
-  `SKETRICGEN_RUNTIME_API_KEY`.
+- **Data plane (read/run)** — `run_workflow` against `dev-chat`, a five-file
+  PNG/PDF/TXT/JSON/CSV attachment run, and a real HITL pause/resume using the
+  unified `SKETRICGEN_API_KEY`.
 - **Write (opt-in)** — a `brand_agents.update` display-name round-trip that
   verifies the effect in DynamoDB and restores the original value.
 
@@ -24,8 +25,7 @@ terminal summary, followed by a reminder to revoke the temporary keys.
 Keys are supplied at run time and **never committed**. Rotate/delete them after.
 
 ```bash
-export SKETRICGEN_ADMIN_API_KEY=sk_admin_...
-export SKETRICGEN_RUNTIME_API_KEY=sk_runtime_...
+export SKETRICGEN_API_KEY=sk_api_...
 # AWS CLI must already be configured for the dev DynamoDB tables (us-east-1).
 
 pytest -m live tests/live -s        # -s shows the SDK-vs-DynamoDB report
@@ -38,8 +38,7 @@ absent, so a keyless `pytest -m live` skips the whole probe.
 
 | Variable | Purpose |
 |---|---|
-| `SKETRICGEN_ADMIN_API_KEY` | Control-plane admin key (required for control-plane probes). |
-| `SKETRICGEN_RUNTIME_API_KEY` | Data-plane runtime key (required for the `run_workflow` probe). |
+| `SKETRICGEN_API_KEY` | Unified key with runtime and admin access. |
 | `SKETRICGEN_DDB_TABLE_SUFFIX` | Optional. The Amplify `SkGen<Model>-<suffix>-NONE` suffix. Auto-resolved by locating the fixture teamspace if unset. |
 | `SKETRICGEN_DDB_REGION` | Optional. DynamoDB region (default `us-east-1`). |
 | `SKETRICGEN_LIVE_WRITE` | Opt-in flag for the mutating probe. Unset ⇒ skipped. |

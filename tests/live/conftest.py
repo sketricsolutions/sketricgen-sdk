@@ -18,7 +18,7 @@ from typing import Optional
 
 import pytest
 
-from sketricgen import AdminClient, SketricGenClient
+from sketricgen import SketricGenClient
 
 from .dynamo import DynamoProbe, DynamoUnavailable
 from .fixtures import (
@@ -38,40 +38,34 @@ def _env(name: str) -> Optional[str]:
 
 
 @pytest.fixture(scope="session")
-def admin_key() -> str:
-    key = _env("SKETRICGEN_ADMIN_API_KEY")
+def api_key() -> str:
+    key = _env("SKETRICGEN_API_KEY")
     if not key:
-        pytest.skip("SKETRICGEN_ADMIN_API_KEY not set; skipping control-plane probe")
+        pytest.skip("SKETRICGEN_API_KEY not set; skipping live probe")
     return key
 
 
 @pytest.fixture(scope="session")
-def runtime_key() -> str:
-    key = _env("SKETRICGEN_RUNTIME_API_KEY")
-    if not key:
-        pytest.skip("SKETRICGEN_RUNTIME_API_KEY not set; skipping data-plane probe")
-    return key
-
-
-@pytest.fixture(scope="session")
-def admin(admin_key: str) -> AdminClient:
-    """Admin client pinned at the dev control plane.
+def admin(api_key: str) -> SketricGenClient:
+    """Unified client pinned at the dev control plane.
 
     The shipped ``DEFAULT_ADMIN_BASE_URL`` targets prod, so the probe overrides
     it to dev explicitly rather than relying on the default.
     """
-    return AdminClient(api_key=admin_key, base_url=DEV_ADMIN_BASE_URL)
+    client = SketricGenClient(api_key=api_key)
+    client._admin._base_url = DEV_ADMIN_BASE_URL
+    return client
 
 
 @pytest.fixture(scope="session")
-def runtime_client(runtime_key: str) -> SketricGenClient:
+def runtime_client(api_key: str) -> SketricGenClient:
     """Data-plane client pointed at dev-chat with dev upload endpoints.
 
     ``SketricGenClient`` has no public ``base_url`` override, so this test-only
     fixture retargets the private config at the dev host. Shipped defaults are
     untouched.
     """
-    client = SketricGenClient(api_key=runtime_key, timeout=120)
+    client = SketricGenClient(api_key=api_key, timeout=120)
     client._config.base_url = DEV_CHAT_BASE_URL
     client._config.upload_init_endpoint = DEV_UPLOAD_INIT_URL
     client._config.upload_complete_endpoint = DEV_UPLOAD_COMPLETE_URL
@@ -117,6 +111,5 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
     terminalreporter.write_line(reporter.render())
     terminalreporter.write_sep("-", "reminder")
     terminalreporter.write_line(
-        "Revoke/rotate the temporary SKETRICGEN_ADMIN_API_KEY and "
-        "SKETRICGEN_RUNTIME_API_KEY now that the probe has run."
+        "Revoke/rotate the temporary SKETRICGEN_API_KEY now that the probe has run."
     )

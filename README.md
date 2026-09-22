@@ -1,6 +1,6 @@
 # SketricGen SDK
 
-Python SDK for the SketricGen Chat Server API.
+Python SDK for the SketricGen runtime and Admin APIs.
 
 ## Installation
 
@@ -22,7 +22,7 @@ pip install -e .
 from sketricgen import SketricGenClient
 
 # Initialize client
-client = SketricGenClient(api_key="your-api-key")
+client = SketricGenClient(api_key="sk_api_...")
 
 # Run a workflow
 response = await client.run_workflow(
@@ -35,9 +35,10 @@ print(response.response)
 ## Features
 
 - **Run Workflow**: Execute chat/workflow requests with agents
-- **Control Plane**: Manage projects, agents, knowledge bases, brand agents, and connectors via `AdminClient` (see [Control Plane — AdminClient](#control-plane--adminclient))
+- **Control Plane**: Manage projects, agents, knowledge bases, brand agents, and connectors through the same client
+- **Human in the Loop**: Enable, inspect, and resume HITL requests
 - **Streaming**: Real-time streaming responses using Server-Sent Events
-- **File Attachments**: Attach files (images, PDFs) to workflows seamlessly
+- **File Attachments**: Attach images, PDFs, spreadsheets, text, structured data, and source files
 - **Async & Sync**: Both async and synchronous API support
 - **Type Safety**: Full type hints for IDE support
 - **Error Handling**: Comprehensive custom exception types
@@ -121,7 +122,41 @@ The streaming API uses [AG-UI](https://docs.ag-ui.com) events from `ag_ui.core`:
 | `TOOL_CALL_END` | Tool/function call completed | `tool_call_id` |
 | `RUN_FINISHED` | Workflow completed | `thread_id`, `run_id`, `result` |
 | `RUN_ERROR` | Workflow error occurred | `message` |
-| `CUSTOM` | Custom event | varies |
+| `RUN_PAUSED_HITL` | Workflow paused for a human decision | `request_id`, `interrupt_ids` |
+| `CUSTOM_EVENT` | Custom event, including `deep_agents_hitl` | varies |
+
+`RUN_FINISHED`, `RUN_ERROR`, and `RUN_PAUSED_HITL` are terminal events; check
+`event.is_terminal` when consuming a stream.
+
+### Human-in-the-Loop
+
+HITL is opt-in for API callers. Send `enable_hitl=True` on the initial turn and
+on every resume turn:
+
+```python
+from sketricgen import HitlDecision, HitlResume, SketricGenClient
+
+client = SketricGenClient(api_key="sk_api_...")
+paused = await client.run_workflow(
+    agent_id="agent-123",
+    user_input="Schedule a recurring report",
+    enable_hitl=True,
+)
+
+if paused.run_paused_hitl and paused.hitl_request:
+    response = await client.run_workflow(
+        agent_id="agent-123",
+        conversation_id=paused.conversation_id,
+        enable_hitl=True,
+        hitl_resume=HitlResume(
+            request_id=paused.hitl_request.request_id,
+            decisions=[HitlDecision(type="approve")],
+        ),
+    )
+```
+
+Decisions are positional: provide one `respond`, `approve`, or `reject` decision
+for each action, in the order returned by `hitl_request.action_requests`.
 
 ### Workflow with File Attachments
 
@@ -220,19 +255,16 @@ client = SketricGenClient(
 )
 
 # From environment variables
-# Set SKETRICGEN_RUNTIME_API_KEY
+# Set SKETRICGEN_API_KEY
 client = SketricGenClient.from_env()
 ```
 
 ## Supported File Types
 
-For file attachments, the following content types are supported:
-
-- `image/jpeg`
-- `image/png`
-- `image/webp`
-- `image/gif`
-- `application/pdf`
+File attachments support JPEG, PNG, WebP, GIF, PDF, CSV, XLS/XLSX, JSON, HTML,
+Markdown, plain text, XML, YAML, and common source-code formats including
+JavaScript, TypeScript, CSS, Python, Ruby, PHP, Java, Kotlin, Go, Rust, Swift,
+Scala, C/C++, C#, SQL, and shell scripts.
 
 Maximum file size: **20 MB**
 
@@ -240,17 +272,19 @@ Maximum file size: **20 MB**
 
 ### SketricGenClient
 
-#### `run_workflow(agent_id, user_input, conversation_id?, contact_id?, file_paths?, stream?)`
+#### `run_workflow(agent_id, user_input?, conversation_id?, contact_id?, file_paths?, stream?, enable_hitl?, hitl_resume?)`
 
 Execute a workflow/chat request.
 
 **Parameters:**
 - `agent_id` (str): Agent ID to chat with
-- `user_input` (str): User message (max 10000 characters)
+- `user_input` (str, optional): User message (max 10000 characters); omit only for HITL resume or asset-only runs
 - `conversation_id` (str, optional): Conversation ID for resuming
 - `contact_id` (str, optional): External contact ID
 - `file_paths` (list[str], optional): List of file paths to upload and attach
 - `stream` (bool, optional): Whether to stream the response
+- `enable_hitl` (bool, optional): Enable HITL tools for this turn
+- `hitl_resume` (`HitlResume`, optional): Decisions for a pending HITL request
 
 **Returns:** `ChatResponse` or `AsyncIterator[StreamEvent]` if streaming
 
@@ -263,72 +297,47 @@ Execute a workflow/chat request.
 - `response`: Assistant's response
 - `owner`: Owner of the agent
 - `error`: Error flag
+- `run_paused_hitl`: Whether the run paused for human input
+- `hitl_request`: Typed pending request metadata required to resume
 
 #### `StreamEvent`
-- `type`: Type of event
+- `event_type`: SSE envelope event type; AG-UI type is in the JSON `data`
 - `data`: Event content
 - `id`: Optional event ID
+- `is_terminal`: True for finished, failed, or HITL-paused runs
 
 ### Sync Methods
 
 The async `run_workflow()` method has a synchronous variant:
 - `run_workflow_sync()`
 
-## Control Plane — AdminClient
+## Control Plane
 
-`SketricGenClient` talks to the **data plane** (running workflows). To *manage*
-resources — teamspace identity, projects, agents, knowledge bases, brand agents,
-and connectors — use `AdminClient`, which talks to the **control plane** (the
-Teamspace v2 Admin API).
-
-The two clients use different credentials and are **not interchangeable**:
-
-| | `SketricGenClient` (data plane) | `AdminClient` (control plane) |
-|---|---|---|
-| Purpose | Run workflows, upload files | Manage resources |
-| Credential | Runtime key (`sk_runtime_…`) | Admin key (`sk_admin_…`) |
-| Env var | `SKETRICGEN_RUNTIME_API_KEY` | `SKETRICGEN_ADMIN_API_KEY` |
-| Auth header | `API-KEY` | `Authorization: Bearer` |
-| Base URL | Configurable | Shipped with the SDK |
+`SketricGenClient` also manages teamspace resources through the Admin API. A
+single `sk_api_…` key may carry `runtime`, `admin`, or both accesses. Calls fail
+with the API's authorization error when the key lacks the required access.
 
 ### Construction
 
 ```python
-from sketricgen import AdminClient
+from sketricgen import SketricGenClient
 
-# Reads the admin key from SKETRICGEN_ADMIN_API_KEY
-admin = AdminClient()
-
-# Or pass the key explicitly
-admin = AdminClient(api_key="sk_admin_...")
-```
-
-The control-plane base URL is **built into the SDK** — you supply only your admin
-key, never a hostname. A `base_url=` argument is available for testing or
-self-hosting, but there is intentionally no environment-variable path for it:
-
-```python
-admin = AdminClient(base_url="https://sandbox.example.com/admin/v1")
-```
-
-A missing admin key fails closed immediately:
-
-```python
-AdminClient(api_key=None)  # raises ValueError if SKETRICGEN_ADMIN_API_KEY is unset
+# Reads SKETRICGEN_API_KEY
+client = SketricGenClient.from_env()
 ```
 
 Every method is **async-first with a synchronous `_sync` twin**, matching
-`SketricGenClient`.
+the runtime methods.
 
 ### whoami
 
 ```python
 # Async
-me = await admin.whoami()
+me = await client.whoami()
 print(me.teamspace_id, me.display_name)
 
 # Sync
-me = admin.whoami_sync()
+me = client.whoami_sync()
 ```
 
 ### Listing resources
@@ -339,21 +348,21 @@ a lazy iterator, so only the pages you consume are fetched:
 
 ```python
 # Async — lazy async iterator
-async for project in admin.projects.list():
+async for project in client.projects.list():
     print(project.project_id, project.display_name)
 
-async for agent in admin.agents.list():
+async for agent in client.agents.list():
     print(agent.agent_id, agent.name)
 
-async for kb in admin.knowledge_bases.list():
+async for kb in client.knowledge_bases.list():
     print(kb.knowledge_base_id, kb.name)
 
 # Sync — lazy iterator
-for project in admin.projects.list_sync():
+for project in client.projects.list_sync():
     print(project.project_id)
-for agent in admin.agents.list_sync():
+for agent in client.agents.list_sync():
     print(agent.agent_id)
-for kb in admin.knowledge_bases.list_sync():
+for kb in client.knowledge_bases.list_sync():
     print(kb.knowledge_base_id)
 ```
 
@@ -365,7 +374,7 @@ yourself.
 
 ```python
 # One call: create and poll to completion
-job = await admin.brand_agents.create_and_wait(
+job = await client.brand_agents.create_and_wait(
     name="Acme Support",
     seed_url="https://acme.example.com",
     poll_interval=10.0,   # seconds between polls
@@ -375,19 +384,19 @@ print(job.status)              # "succeeded"
 print(job.embed.snippet)       # embed code for the finished agent
 
 # Or drive the async flow yourself
-job = await admin.brand_agents.create(
+job = await client.brand_agents.create(
     name="Acme Support",
     seed_url="https://acme.example.com",
 )
-status = await admin.brand_agents.get_status(job.job_id)
+status = await client.brand_agents.get_status(job.job_id)
 print(status.status, status.phase)
 
 # Browse the template catalog
-templates = await admin.brand_agents.list_templates()
+templates = await client.brand_agents.list_templates()
 
 # Inspect and edit an existing brand agent
-detail = await admin.brand_agents.get(agent_id)
-result = await admin.brand_agents.update(
+detail = await client.brand_agents.get(agent_id)
+result = await client.brand_agents.update(
     agent_id,
     display_name="Acme Assistant",
     instructions="Be concise.",
@@ -396,14 +405,14 @@ result = await admin.brand_agents.update(
 )
 
 # Widget configuration
-config = await admin.brand_agents.get_widget_config(agent_id)
-await admin.brand_agents.update_widget_config(agent_id, primary_color="#0055FF")
+config = await client.brand_agents.get_widget_config(agent_id)
+await client.brand_agents.update_widget_config(agent_id, primary_color="#0055FF")
 
 # Sync
-job = admin.brand_agents.create_and_wait_sync(
+job = client.brand_agents.create_and_wait_sync(
     name="Acme Support", seed_url="https://acme.example.com",
 )
-templates = admin.brand_agents.list_templates_sync()
+templates = client.brand_agents.list_templates_sync()
 ```
 
 `create_and_wait()` raises `SketricGenJobError` if the job fails and
@@ -417,24 +426,24 @@ a failed provision is never silently treated as success. Sync twins:
 
 ```python
 # Curated brand-connector catalog
-connectors = await admin.connectors.list()
+connectors = await client.connectors.list()
 
 # Grantable tool names for one connector
-tools = await admin.connectors.list_tools("gmail")
+tools = await client.connectors.list_tools("gmail")
 
 # Mint a hosted consent URL, then poll until a human finishes connecting
-link = await admin.connectors.create_link("gmail", project_id="proj-123")
+link = await client.connectors.create_link("gmail", project_id="proj-123")
 print(link.connect_url)
-status = await admin.connectors.check_connection("gmail", project_id="proj-123")
+status = await client.connectors.check_connection("gmail", project_id="proj-123")
 print(status.connected)
 
 # Attach a connector's tools to an agent, or detach it
-await admin.connectors.attach(agent_id, "gmail", allowed_tools=["send_email"])
-await admin.connectors.detach(agent_id, "gmail")
+await client.connectors.attach(agent_id, "gmail", allowed_tools=["send_email"])
+await client.connectors.detach(agent_id, "gmail")
 
 # Sync
-connectors = admin.connectors.list_sync()
-admin.connectors.attach_sync(agent_id, "gmail", allowed_tools=["send_email"])
+connectors = client.connectors.list_sync()
+client.connectors.attach_sync(agent_id, "gmail", allowed_tools=["send_email"])
 ```
 
 Attach/detach are grouped under `connectors` (connector-centric) even though the
@@ -449,21 +458,21 @@ failure kind instead of parsing message strings:
 
 ```python
 from sketricgen import (
-    AdminClient,
+    SketricGenClient,
     SketricGenAdminError,
     SketricGenAuthenticationError,
     SketricGenJobError,
     SketricGenError,
 )
 
-admin = AdminClient()
+client = SketricGenClient.from_env()
 
 try:
-    job = await admin.brand_agents.create_and_wait(
+    job = await client.brand_agents.create_and_wait(
         name="Acme", seed_url="https://acme.example.com",
     )
 except SketricGenAuthenticationError:
-    print("Admin key rejected (401)")
+    print("API key rejected (401)")
 except SketricGenJobError as e:
     print(f"Provisioning failed for job {e.job_id}: {e.error_summary}")
 except SketricGenAdminError as e:

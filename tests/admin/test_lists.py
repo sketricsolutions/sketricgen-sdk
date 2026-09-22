@@ -3,13 +3,13 @@
 import httpx
 import respx
 
-from sketricgen import AdminClient
+from sketricgen import SketricGenClient
 
 from .conftest import BASE_URL
 
 
 @respx.mock
-async def test_projects_list_follows_cursor(admin: AdminClient) -> None:
+async def test_projects_list_follows_cursor(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/projects").mock(
         side_effect=[
             httpx.Response(
@@ -33,11 +33,11 @@ async def test_projects_list_follows_cursor(admin: AdminClient) -> None:
     # First page carries no cursor; second page threads next_token.
     assert "next_token" not in route.calls[0].request.url.params
     assert route.calls[1].request.url.params["next_token"] == "tok1"
-    assert route.calls[0].request.headers["Authorization"] == "Bearer sk_admin_test"
+    assert route.calls[0].request.headers["Authorization"] == "Bearer sk_api_test"
 
 
 @respx.mock
-async def test_short_page_is_not_end_of_list(admin: AdminClient) -> None:
+async def test_short_page_is_not_end_of_list(admin: SketricGenClient) -> None:
     # A page shorter than `limit` still has more when next_token is present.
     route = respx.get(f"{BASE_URL}/projects").mock(
         side_effect=[
@@ -56,7 +56,7 @@ async def test_short_page_is_not_end_of_list(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_projects_list_sync(admin: AdminClient) -> None:
+def test_projects_list_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/projects").mock(
         return_value=httpx.Response(
             200, json={"projects": [{"project_id": "p1"}], "next_token": None}
@@ -68,7 +68,7 @@ def test_projects_list_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_agents_list(admin: AdminClient) -> None:
+async def test_agents_list(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/agents").mock(
         return_value=httpx.Response(
             200,
@@ -87,7 +87,7 @@ async def test_agents_list(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_agents_list_sync(admin: AdminClient) -> None:
+def test_agents_list_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/agents").mock(
         return_value=httpx.Response(
             200, json={"agents": [{"agent_id": "a9"}], "next_token": None}
@@ -98,7 +98,7 @@ def test_agents_list_sync(admin: AdminClient) -> None:
 
 
 @respx.mock
-async def test_knowledge_bases_list(admin: AdminClient) -> None:
+async def test_knowledge_bases_list(admin: SketricGenClient) -> None:
     route = respx.get(f"{BASE_URL}/knowledge-bases").mock(
         return_value=httpx.Response(
             200,
@@ -123,7 +123,7 @@ async def test_knowledge_bases_list(admin: AdminClient) -> None:
 
 
 @respx.mock
-def test_knowledge_bases_list_sync(admin: AdminClient) -> None:
+def test_knowledge_bases_list_sync(admin: SketricGenClient) -> None:
     respx.get(f"{BASE_URL}/knowledge-bases").mock(
         return_value=httpx.Response(
             200,

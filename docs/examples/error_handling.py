@@ -3,16 +3,17 @@ Error handling examples for the SketricGen SDK.
 """
 
 import asyncio
+
 from sketricgen import (
-    SketricGenClient,
     SketricGenAPIError,
     SketricGenAuthenticationError,
-    SketricGenValidationError,
+    SketricGenClient,
+    SketricGenContentTypeError,
+    SketricGenFileSizeError,
     SketricGenNetworkError,
     SketricGenTimeoutError,
-    SketricGenFileSizeError,
-    SketricGenContentTypeError,
     SketricGenUploadError,
+    SketricGenValidationError,
 )
 
 
